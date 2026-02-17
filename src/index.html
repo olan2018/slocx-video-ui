@@ -78,7 +78,7 @@
         myVideo.muted = true;
 
         const myPeer = new Peer(undefined, {
-          host: "3001-peers-peerjsserver-ke4ctk6fasc.ws-eu110.gitpod.io",
+          host: "video-call-slocx.onrender.com",
         });
 
         const peers = {};
@@ -90,7 +90,7 @@
           ignoreQueryPrefix: true,
         });
 
-        const socket = io("https://3000-peers-peerjsserver-ke4ctk6fasc.ws-eu110.gitpod.io");
+        const socket = io("https://video-call-slocx.onrender.com");
 
         socket.on("sameName", () => {
           alert(

@@ -51,7 +51,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     // this.myVideo.muted = true;
 
     this.myPeer = new Peer('', {
-      host: '3001-peers-peerjsserver-ke4ctk6fasc.ws-eu110.gitpod.io',
+      host: 'video-call-slocx.onrender.com',
       // port: 3001,
       // path: `/`,
       // secure: true,
@@ -62,7 +62,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     });
 
     const socket = io(
-      'https://3000-peers-peerjsserver-ke4ctk6fasc.ws-eu110.gitpod.io'
+      'https://video-call-slocx.onrender.com'
     );
 
     socket.on('sameName', () => {
