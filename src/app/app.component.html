@@ -2,20 +2,15 @@
   <mat-sidenav-content>
     <mat-toolbar
       style="
-        background-color: #ffbf0066;
+        background-color: #163664;
         position: relative;
         backdrop-filter: blur(10px);
-        opacity: 10;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
       "
     >
-      <img src="../assets/slocx.png" style="width: 100px" />
-      <span class="mt-1">|</span><span class="mt-2">Slocx Classroom</span>
-
-      <!-- <button class="mode-switch">
-        <i class="bi bi-brightness-high sun"></i>
-        <i class="bi bi-moon moon"></i>
-       
-      </button> -->
+      <img src="../assets/slocx.png" style="width: 100px; filter: brightness(1.2)" />
+      <span class="mt-1" style="color: rgba(255,255,255,0.4); margin: 0 8px">|</span>
+      <span class="mt-2" style="color: #fff; font-weight: 500; letter-spacing: 0.5px">Slocx Classroom</span>
     </mat-toolbar>
     <!-- <app-chat></app-chat> -->
 
@@ -28,22 +23,17 @@
         class="mt-4 d-flex justify-content-center position-absolute"
         style="z-index: 10; bottom: 20px; right: 0; left: 0"
       >
-        <div class="d-flex flex-row gap-2 actionbt">
+        <div class="d-flex flex-row gap-3 actionbt">
           <button
             type="button"
-            class="btn btn-primary"
+            class="btn control-btn"
             id="toggle-video"
-            style="background-color: #ffc107; border: none"
           >
             <i class="bi bi-camera-video" id="video"></i>
           </button>
-          <button type="button" class="btn btn-light" id="toggle-mute">
+          <button type="button" class="btn control-btn" id="toggle-mute">
             <i class="bi bi-mic" id="mic"></i>
           </button>
-
-          <!-- <button type="button" class="btn btn-danger">
-            <i class="bi bi-telephone-x" (click)="closeTab()"></i>
-          </button> -->
         </div>
       </div>
     </div>
