@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -79,6 +79,9 @@
 
         const myPeer = new Peer(undefined, {
           host: "slocx-0-0-2.onrender.com",
+          port: 9000,
+          path: `/`,
+          secure: true,
         });
 
         const peers = {};
@@ -94,7 +97,7 @@
 
         socket.on("sameName", () => {
           alert(
-            "You already joined the call, please disconnect before continuing here."
+            "You already joined the call, please disconnect before continuing here.",
           );
           window.history.back();
         });

@@ -52,9 +52,9 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     this.myPeer = new Peer('', {
       host: 'slocx-0-0-2.onrender.com',
-      // port: 3001,
-      // path: `/`,
-      // secure: true,
+      port: 9000,
+      path: `/`,
+      secure: true,
     });
     console.log('peer');
     const { username, room } = Qs.parse(location.search, {
