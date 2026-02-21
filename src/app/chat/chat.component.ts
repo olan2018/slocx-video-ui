@@ -51,7 +51,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     // this.myVideo.muted = true;
 
     this.myPeer = new Peer('', {
-      host: 'video-call-slocx.onrender.com',
+      host: 'slocx-0-0-2.onrender.com',
       // port: 3001,
       // path: `/`,
       // secure: true,
