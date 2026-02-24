@@ -96,7 +96,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           });
         });
 
-        socket.on('user-connected', ({ userPeerId }) => {
+        socket.on('user-connected', (userPeerId: string) => {
           setTimeout(() => {
             this.connectToNewUser(userPeerId, stream);
           }, 1000);
