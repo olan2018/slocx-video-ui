@@ -46,34 +46,59 @@ export class ChatComponent implements OnInit, OnDestroy {
   constructor() {}
 
   ngOnInit(): void {
-    // this.videoGrid = document.getElementById('video-grid') as HTMLDivElement;
-    // this.myVideo = document.createElement('video');
-    // this.myVideo.muted = true;
+    const { user: username, room } = Qs.parse(location.search, {
+      ignoreQueryPrefix: true,
+    });
+    console.log('[INIT] parsed query params — username:', username, '| room:', room);
 
     this.myPeer = new Peer('', {
       host: 'slocx-0-0-2.onrender.com',
       path: '/',
       secure: true,
     });
-    console.log('peer');
-    const { user: username, room } = Qs.parse(location.search, {
-      ignoreQueryPrefix: true,
+    console.log('[PEER] Peer instance created');
+
+    this.myPeer.on('open', (userPeerId: string) => {
+      this.userPeerId = userPeerId;
+      console.log('[PEER] open — my peerId:', userPeerId);
+      console.log('[SOCKET] emitting joinRoom:', { userPeerId, username, room });
+      socket.emit('joinRoom', { userPeerId, username, room });
     });
 
-    const socket = io(
-      'https://video-call-slocx.onrender.com'
-    );
+    this.myPeer.on('error', (err: any) => {
+      console.error('[PEER] error:', err);
+    });
+
+    const socket = io('https://video-call-slocx.onrender.com');
+
+    socket.on('connect', () => {
+      console.log('[SOCKET] connected — socketId:', socket.id);
+    });
+
+    socket.on('disconnect', (reason: string) => {
+      console.warn('[SOCKET] disconnected — reason:', reason);
+    });
+
+    socket.on('connect_error', (err: Error) => {
+      console.error('[SOCKET] connect_error:', err.message);
+    });
 
     socket.on('sameName', () => {
+      console.warn('[SOCKET] sameName — already in call');
       alert(
         'You already joined the call, please disconnect before continuing here.'
       );
-      window.history.back();  
+      window.history.back();
     });
 
     socket.on('roomNotValid', () => {
+      console.warn('[SOCKET] roomNotValid — room:', room);
       alert('Invalid slocx classroom call link!.');
-      // window.history.back();
+    });
+
+    socket.on('doNotBelongToClass', () => {
+      console.warn('[SOCKET] doNotBelongToClass — username:', username, '| room:', room);
+      alert('You do not belong to this class.');
     });
 
     navigator.mediaDevices
@@ -82,54 +107,62 @@ export class ChatComponent implements OnInit, OnDestroy {
         audio: true,
       })
       .then((stream) => {
+        console.log('[MEDIA] getUserMedia success — stream id:', stream.id);
         const video = document.createElement('video');
         video.muted = true;
         this.addVideoStream(video, stream, this.userPeerId);
-        console.log('stream 1');
 
-        this.myPeer.on('call', (call) => {
+        this.myPeer.on('call', (call: MediaConnection) => {
+          console.log('[PEER] incoming call from:', call.peer);
           call.answer(stream);
+          console.log('[PEER] answered call from:', call.peer);
           const video = document.createElement('video');
-          call.on('stream', (userVideoStream) => {
-            console.log('caller stream:', userVideoStream)
+          call.on('stream', (userVideoStream: MediaStream) => {
+            console.log('[PEER] incoming call stream received from:', call.peer, '| stream id:', userVideoStream.id);
             this.addVideoStream(video, userVideoStream);
+          });
+          call.on('error', (err: any) => {
+            console.error('[PEER] incoming call error from:', call.peer, err);
+          });
+          call.on('close', () => {
+            console.log('[PEER] incoming call closed from:', call.peer);
           });
         });
 
         socket.on('user-connected', (userPeerId: string) => {
+          console.log('[SOCKET] user-connected — remote peerId:', userPeerId);
           setTimeout(() => {
+            console.log('[SOCKET] calling connectToNewUser after delay — remote peerId:', userPeerId);
             this.connectToNewUser(userPeerId, stream);
           }, 1000);
         });
+      })
+      .catch((err) => {
+        console.error('[MEDIA] getUserMedia error:', err);
       });
 
-    socket.on('user-disconnected', (userId) => {
-      // console.log('user-disconnected a', this.userPeerId, userId);
-      // document.getElementById(userId)?.parentElement?.remove();
+    socket.on('user-disconnected', (userId: string) => {
+      console.log('[SOCKET] user-disconnected — peerId:', userId);
       if (this.peers[userId]) {
-        console.log('user-disconnected b', userId);
         this.peers[userId].close();
+      } else {
+        console.warn('[SOCKET] user-disconnected — no peer found for:', userId);
       }
-    });
-
-    this.myPeer.on('open', (userPeerId) => {
-      this.userPeerId = userPeerId;
-      socket.emit('joinRoom', { userPeerId, username, room });
     });
 
     // this.inputMessage?.nativeElement.addEventListener('input', () => {
     //   this.updateTyping();
     // });
 
-    socket.on('typing', (data) => {
+    socket.on('typing', (data: any) => {
       this.addChatTyping(data);
     });
 
-    socket.on('stop typing', (data) => {
+    socket.on('stop typing', (data: any) => {
       this.removeChatTyping(data);
     });
 
-    socket.on('roomUsers', ({ room, users }) => {
+    socket.on('roomUsers', ({ room, users }: { room: any; users: any }) => {
       this.outputRoomName(room);
       this.outputUsers(users);
     });
@@ -150,7 +183,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     const call = this.myPeer.call(userId, stream);
     const video = document.createElement('video');
 
-    call.on('stream', (userVideoStream) => {
+    call.on('stream', (userVideoStream: MediaStream) => {
       console.log('stream 3', userVideoStream);
       this.addVideoStream(video, userVideoStream, userId);
     });
