@@ -4,14 +4,8 @@
 
 export const environment = {
   production: false,
-  wsEndpoint: 'ws://172.19.32.1:2000',
-  RTCPeerConfiguration: {
-    iceServers: [
-      {
-        urls: 'stun:stun1.l.google.com:19302'
-      }
-    ]
-  },
+  socketUrl: 'https://video-call-slocx.onrender.com',
+  peerHost: 'slocx-0-0-2.onrender.com',
 };
 
 /*

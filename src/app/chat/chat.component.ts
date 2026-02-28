@@ -8,6 +8,7 @@ import {
 import Peer, { MediaConnection } from 'peerjs';
 import { io } from 'socket.io-client';
 import * as Qs from 'qs';
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-chat',
@@ -43,7 +44,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       ignoreQueryPrefix: true,
     });
 
-    const socket = io('https://video-call-slocx.onrender.com');
+    const socket = io(environment.socketUrl);
 
     socket.on('connect', () => {
       console.log('[SOCKET] connected');
@@ -71,7 +72,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     });
 
     this.myPeer = new Peer('', {
-      host: 'slocx-0-0-2.onrender.com',
+      host: environment.peerHost,
       path: '/',
       secure: true,
     });
