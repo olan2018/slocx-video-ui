@@ -103,6 +103,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           call.answer(stream);
           const video = document.createElement('video');
           video.setAttribute('playsinline', '');
+          video.autoplay = true;
           call.on('stream', (remoteStream: MediaStream) => {
             this.addRemoteStream(video, remoteStream, call.peer);
           });
@@ -183,6 +184,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (!call) return;
     const video = document.createElement('video');
     video.setAttribute('playsinline', '');
+    video.autoplay = true;
 
     call.on('stream', (remoteStream: MediaStream) => {
       this.addRemoteStream(video, remoteStream, userId);
@@ -205,21 +207,26 @@ export class ChatComponent implements OnInit, OnDestroy {
     // Don't add duplicate tile for the same peer
     if (document.getElementById('tile-' + userId)) return;
 
-    video.srcObject = stream;
-    video.setAttribute('playsinline', '');
-    video.addEventListener('loadedmetadata', () => {
-      video.play().catch(() => {});
-    });
-
+    // Build and attach tile to DOM first so the video element is live
     const tile = document.createElement('div');
     tile.classList.add('meet-video-tile');
     tile.id = 'tile-' + userId;
     tile.append(video);
 
-    if (this.videoGrid?.nativeElement) {
-      this.videoGrid.nativeElement.append(tile);
-      this.remoteCount++;
-    }
+    const grid = this.videoGrid?.nativeElement ?? document.querySelector('.meet-video-grid');
+    if (!grid) return;
+    grid.append(tile);
+    this.remoteCount++;
+
+    // Set stream after element is in DOM, then play immediately
+    video.setAttribute('playsinline', '');
+    video.autoplay = true;
+    video.srcObject = stream;
+    video.play().catch(() => {
+      // Autoplay blocked — try muted fallback (browser policy)
+      video.muted = true;
+      video.play().catch(console.error);
+    });
   }
 
   private removeParticipant(userId: string): void {
