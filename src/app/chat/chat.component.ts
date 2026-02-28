@@ -75,6 +75,13 @@ export class ChatComponent implements OnInit, OnDestroy {
       host: environment.peerHost,
       path: '/',
       secure: true,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+        ],
+      },
     });
 
     this.myPeer.on('open', (userPeerId: string) => {
@@ -204,8 +211,13 @@ export class ChatComponent implements OnInit, OnDestroy {
     stream: MediaStream,
     userId: string
   ): void {
-    // Don't add duplicate tile for the same peer
-    if (document.getElementById('tile-' + userId)) return;
+    const existingTile = document.getElementById('tile-' + userId);
+    if (existingTile) {
+      // ICE renegotiation fired stream again — update srcObject on existing video
+      video.srcObject = stream;
+      video.play().catch(console.error);
+      return;
+    }
 
     // Build and attach tile to DOM first so the video element is live
     const tile = document.createElement('div');
