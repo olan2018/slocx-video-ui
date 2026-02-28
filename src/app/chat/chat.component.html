@@ -1,153 +1,90 @@
-<!-- <div class="container" style="margin-top: 100px">
-  <mat-grid-list cols="2" gutterSize="10px" rowHeight="2:1">
-    <mat-grid-tile>
-      <p class="name">Simon Ayo</p>
-      <video #local_video [autoplay]="true" [muted]="true"></video>
-    </mat-grid-tile>
-    <mat-grid-tile>
-      <p class="name">Kunle Oriyomi</p>
-      <video #received_video [autoplay]="true"></video>
-    </mat-grid-tile>
-  </mat-grid-list>
-  <div class="mt-4 d-flex justify-content-center">
-    <div class="d-flex flex-row gap-2 actionbt">
-      <button type="button" class="btn btn-primary" (click)="startLocalVideo()">
-        <i class="bi bi-camera-video-off" *ngIf="!localVideoActive"></i>
-        <i class="bi bi-camera-video" *ngIf="localVideoActive"></i>
-      </button>
-      <button type="button" class="btn btn-light">
-        <i class="bi bi-mic-mute"></i>
-      </button>
-
-      <button
-        type="button"
-        class="btn btn-danger"
-        (click)="hangUp()"
-        *ngIf="inCall"
-      >
-        <i class="bi bi-telephone-x"></i>
-      </button>
-      <button
-        type="button"
-        class="btn btn-success"
-        (click)="call()"
-        *ngIf="!inCall"
-      >
-        <i class="bi bi-telephone"></i>
-      </button>
+<div class="meet-root">
+  <!-- Top bar -->
+  <div class="meet-topbar">
+    <div class="meet-topbar-left">
+      <img src="../../assets/slocx.png" class="meet-logo" alt="Slocx" />
+      <span class="meet-brand">Slocx Classroom</span>
+    </div>
+    <div class="meet-topbar-right">
+      <span class="meet-clock">{{ currentTime | date:'HH:mm' }}</span>
     </div>
   </div>
- 
-</div> -->
 
-<!-- <div #videoGrid class="video-container justify-content-center">
-  <video #myVideo [autoplay]="true" [muted]="true"></video>
-</div> -->
-
-<!-- <div>
-  <video #received_video [autoplay]="true" class="visitor"></video>
-</div>  -->
-
-<!-- <div
-  class="mt-4 d-flex justify-content-center position-absolute"
-  style="z-index: 10; bottom: 20px; right: 0; left: 0"
->
-  <div class="d-flex flex-row gap-2 actionbt">
-    <button type="button" class="btn btn-primary">
-      <i class="bi bi-camera-video-off" *ngIf="!localVideoActive"></i>
-      <i class="bi bi-camera-video" *ngIf="localVideoActive"></i>
-    </button>
-    <button type="button" class="btn btn-light">
-      <i class="bi bi-mic-mute"></i>
-    </button>
-
-    <button type="button" class="btn btn-danger" *ngIf="inCall">
-      <i class="bi bi-telephone-x"></i>
-    </button>
-    <button type="button" class="btn btn-success" *ngIf="!inCall">
-      <i class="bi bi-telephone"></i>
-    </button>
-  </div>
-</div> -->
-
-<div class="app-container">
-  <div class="app-main">
-    <div class="video-call-wrapper" #videos>
-     
+  <!-- Main area -->
+  <div class="meet-main">
+    <!-- Permission denied -->
+    <div class="meet-state" *ngIf="permissionError">
+      <div class="meet-state-icon meet-state-icon--error">
+        <i class="bi bi-camera-video-off-fill"></i>
+      </div>
+      <p class="meet-state-title">Camera or microphone access denied</p>
+      <p class="meet-state-sub">Please allow camera and microphone access in your browser settings, then refresh the page.</p>
     </div>
-     <!-- <div class="video-participant">
-        <a href="#" class="name-tag">You</a>
-        <video #myVideo [autoplay]="true"  [muted]="true"></video>
-      </div> -->
-     
-    <!-- <div class="video-call-actions">
-      <button class="video-action-button mic"></button>
-      <button class="video-action-button camera"></button>
-      <button class="video-action-button endcall">Leave</button>
-    </div> -->
-  </div>
-  <!-- <div class="right-side">
-    <button class="btn-close-right">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="24"
-        height="24"
-        fill="none"
-        stroke="currentColor"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        stroke-width="2"
-        class="feather feather-x-circle"
-        viewBox="0 0 24 24"
-      >
-        <defs></defs>
-        <circle cx="12" cy="12" r="10"></circle>
-        <path d="M15 9l-6 6M9 9l6 6"></path>
-      </svg>
-    </button>
-    <div class="chat-container">
-      <div class="chat-area"></div>
-      <div class="chat-typing-area-wrapper">
-        <div class="chat-typing-area">
-          <input
-            type="text"
-            placeholder="Type your meesage..."
-            class="chat-input"
-          />
-          <button class="send-button">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              class="feather feather-send"
-              viewBox="0 0 24 24"
-            >
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-            </svg>
-          </button>
+
+    <!-- Connection / room error -->
+    <div class="meet-state" *ngIf="connectionError && !permissionError">
+      <div class="meet-state-icon meet-state-icon--error">
+        <i class="bi bi-wifi-off"></i>
+      </div>
+      <p class="meet-state-title">Unable to join classroom</p>
+      <p class="meet-state-sub">{{ connectionErrorMsg }}</p>
+    </div>
+
+    <!-- Waiting for others -->
+    <div class="meet-state" *ngIf="!permissionError && !connectionError && remoteCount === 0">
+      <div class="meet-state-icon">
+        <i class="bi bi-person-circle"></i>
+      </div>
+      <p class="meet-state-title">You're the only one here</p>
+      <p class="meet-state-sub">Waiting for others to join the lesson...</p>
+    </div>
+
+    <!-- Remote video grid -->
+    <div class="meet-video-grid" #videos [class.has-remotes]="remoteCount > 0"></div>
+
+    <!-- Local video PiP -->
+    <div class="meet-pip" *ngIf="!permissionError">
+      <video #localVideo autoplay muted playsinline></video>
+      <div class="meet-pip-overlay">
+        <span class="meet-name-tag">You</span>
+        <div class="meet-pip-badges">
+          <i class="bi bi-mic-mute-fill" *ngIf="isMuted" style="color:#ea4335"></i>
+          <i class="bi bi-camera-video-off-fill" *ngIf="!isCameraOn" style="color:#ea4335; margin-left:4px"></i>
         </div>
       </div>
     </div>
   </div>
-  <button class="expand-btn">
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      class="feather feather-message-circle"
-    >
-      <path
-        d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
-      />
-    </svg>
-  </button> -->
+
+  <!-- Bottom control bar -->
+  <div class="meet-controls">
+    <div class="meet-controls-inner">
+      <!-- Mic -->
+      <button
+        class="meet-ctrl-btn"
+        [class.meet-ctrl-off]="isMuted"
+        (click)="toggleMic()"
+        [title]="isMuted ? 'Unmute microphone' : 'Mute microphone'"
+      >
+        <i class="bi" [class.bi-mic-fill]="!isMuted" [class.bi-mic-mute-fill]="isMuted"></i>
+        <span class="meet-ctrl-label">{{ isMuted ? 'Unmute' : 'Mute' }}</span>
+      </button>
+
+      <!-- Camera -->
+      <button
+        class="meet-ctrl-btn"
+        [class.meet-ctrl-off]="!isCameraOn"
+        (click)="toggleCamera()"
+        [title]="isCameraOn ? 'Turn off camera' : 'Turn on camera'"
+      >
+        <i class="bi" [class.bi-camera-video-fill]="isCameraOn" [class.bi-camera-video-off-fill]="!isCameraOn"></i>
+        <span class="meet-ctrl-label">{{ isCameraOn ? 'Stop video' : 'Start video' }}</span>
+      </button>
+
+      <!-- Leave -->
+      <button class="meet-ctrl-btn meet-ctrl-leave" (click)="leaveCall()" title="Leave call">
+        <i class="bi bi-telephone-x-fill"></i>
+        <span class="meet-ctrl-label">Leave</span>
+      </button>
+    </div>
+  </div>
 </div>

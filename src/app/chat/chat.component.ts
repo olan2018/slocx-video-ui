@@ -9,59 +9,74 @@ import Peer, { MediaConnection } from 'peerjs';
 import { io } from 'socket.io-client';
 import * as Qs from 'qs';
 
-
-interface IKoshatishise {
-   
-}
-
 @Component({
   selector: 'app-chat',
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.css'],
 })
 export class ChatComponent implements OnInit, OnDestroy {
-  // @ViewChild('chatForm') chatForm!: ElementRef;
-  // @ViewChild('chatMessages') chatMessages!: ElementRef;
-  // @ViewChild('roomName') roomName!: ElementRef;
-  // @ViewChild('userList') userList!: ElementRef;
   @ViewChild('videos') videoGrid!: ElementRef;
-  // @ViewChild('myVideo') myVideo!: ElementRef;
-  // @ViewChild('inputMessage') inputMessage!: ElementRef;
-  localVideoActive: boolean = true;
-  inCall: boolean = false;
-  // const peer = new Peer("pick-an-id");
+  @ViewChild('localVideo') localVideoEl!: ElementRef<HTMLVideoElement>;
 
-  videos: {
-    name: string;
-    videostream: any;
-  }[] = [];
+  // State
+  isMuted: boolean = false;
+  isCameraOn: boolean = true;
+  permissionError: boolean = false;
+  connectionError: boolean = false;
+  connectionErrorMsg: string = '';
+  remoteCount: number = 0;
+  currentTime: Date = new Date();
 
-  TYPING_TIMER_LENGTH: number = 400;
-  myPeer!: Peer;
-  peers: { [key: string]: MediaConnection } = {};
-  typing: boolean = false;
-  lastTypingTime: number = 0;
-  userPeerId: string = '';
+  private myPeer!: Peer;
+  private localStream!: MediaStream;
+  private peers: { [key: string]: MediaConnection } = {};
+  private timeInterval!: any;
 
   constructor() {}
 
   ngOnInit(): void {
+    this.timeInterval = setInterval(() => {
+      this.currentTime = new Date();
+    }, 1000);
+
     const { user: username, room } = Qs.parse(location.search, {
       ignoreQueryPrefix: true,
     });
-    console.log('[INIT] parsed query params — username:', username, '| room:', room);
+
+    const socket = io('https://video-call-slocx.onrender.com');
+
+    socket.on('connect', () => {
+      console.log('[SOCKET] connected');
+    });
+    socket.on('disconnect', (reason: string) => {
+      console.warn('[SOCKET] disconnected:', reason);
+    });
+    socket.on('connect_error', (err: Error) => {
+      console.error('[SOCKET] connect_error:', err.message);
+    });
+
+    socket.on('roomNotValid', () => {
+      this.connectionError = true;
+      this.connectionErrorMsg = 'This classroom link is invalid or the lesson has not started yet.';
+    });
+
+    socket.on('doNotBelongToClass', () => {
+      this.connectionError = true;
+      this.connectionErrorMsg = 'You are not a participant of this lesson.';
+    });
+
+    socket.on('sameName', () => {
+      this.connectionError = true;
+      this.connectionErrorMsg = 'You are already connected to this lesson from another window.';
+    });
 
     this.myPeer = new Peer('', {
       host: 'slocx-0-0-2.onrender.com',
       path: '/',
       secure: true,
     });
-    console.log('[PEER] Peer instance created');
 
     this.myPeer.on('open', (userPeerId: string) => {
-      this.userPeerId = userPeerId;
-      console.log('[PEER] open — my peerId:', userPeerId);
-      console.log('[SOCKET] emitting joinRoom:', { userPeerId, username, room });
       socket.emit('joinRoom', { userPeerId, username, room });
     });
 
@@ -69,198 +84,154 @@ export class ChatComponent implements OnInit, OnDestroy {
       console.error('[PEER] error:', err);
     });
 
-    const socket = io('https://video-call-slocx.onrender.com');
-
-    socket.on('connect', () => {
-      console.log('[SOCKET] connected — socketId:', socket.id);
-    });
-
-    socket.on('disconnect', (reason: string) => {
-      console.warn('[SOCKET] disconnected — reason:', reason);
-    });
-
-    socket.on('connect_error', (err: Error) => {
-      console.error('[SOCKET] connect_error:', err.message);
-    });
-
-    socket.on('sameName', () => {
-      console.warn('[SOCKET] sameName — already in call');
-      alert(
-        'You already joined the call, please disconnect before continuing here.'
-      );
-      window.history.back();
-    });
-
-    socket.on('roomNotValid', () => {
-      console.warn('[SOCKET] roomNotValid — room:', room);
-      alert('Invalid slocx classroom call link!.');
-    });
-
-    socket.on('doNotBelongToClass', () => {
-      console.warn('[SOCKET] doNotBelongToClass — username:', username, '| room:', room);
-      alert('You do not belong to this class.');
-    });
-
     navigator.mediaDevices
-      .getUserMedia({
-        video: true,
-        audio: true,
-      })
+      .getUserMedia({ video: true, audio: true })
       .then((stream) => {
-        console.log('[MEDIA] getUserMedia success — stream id:', stream.id);
-        const video = document.createElement('video');
-        video.muted = true;
-        this.addVideoStream(video, stream, this.userPeerId);
+        this.localStream = stream;
 
+        // Show local video in PiP — use setTimeout to wait for ViewChild
+        setTimeout(() => {
+          if (this.localVideoEl?.nativeElement) {
+            this.localVideoEl.nativeElement.srcObject = stream;
+            this.localVideoEl.nativeElement.play().catch(() => {});
+          }
+        }, 0);
+
+        // Answer incoming PeerJS calls
         this.myPeer.on('call', (call: MediaConnection) => {
-          console.log('[PEER] incoming call from:', call.peer);
           call.answer(stream);
-          console.log('[PEER] answered call from:', call.peer);
           const video = document.createElement('video');
-          call.on('stream', (userVideoStream: MediaStream) => {
-            console.log('[PEER] incoming call stream received from:', call.peer, '| stream id:', userVideoStream.id);
-            this.addVideoStream(video, userVideoStream);
-          });
-          call.on('error', (err: any) => {
-            console.error('[PEER] incoming call error from:', call.peer, err);
+          video.setAttribute('playsinline', '');
+          call.on('stream', (remoteStream: MediaStream) => {
+            this.addRemoteStream(video, remoteStream, call.peer);
           });
           call.on('close', () => {
-            console.log('[PEER] incoming call closed from:', call.peer);
+            this.removeParticipant(call.peer);
+          });
+          call.on('error', (err: any) => {
+            console.error('[PEER] call error:', err);
           });
         });
 
+        // New user joined — call them
         socket.on('user-connected', (userPeerId: string) => {
-          console.log('[SOCKET] user-connected — remote peerId:', userPeerId);
           setTimeout(() => {
-            console.log('[SOCKET] calling connectToNewUser after delay — remote peerId:', userPeerId);
             this.connectToNewUser(userPeerId, stream);
           }, 1000);
         });
       })
       .catch((err) => {
         console.error('[MEDIA] getUserMedia error:', err);
+        this.permissionError = true;
       });
 
+    // Remote user left
     socket.on('user-disconnected', (userId: string) => {
-      console.log('[SOCKET] user-disconnected — peerId:', userId);
       if (this.peers[userId]) {
         this.peers[userId].close();
-      } else {
-        console.warn('[SOCKET] user-disconnected — no peer found for:', userId);
+        delete this.peers[userId];
       }
+      this.removeParticipant(userId);
     });
-
-    // this.inputMessage?.nativeElement.addEventListener('input', () => {
-    //   this.updateTyping();
-    // });
-
-    socket.on('typing', (data: any) => {
-      this.addChatTyping(data);
-    });
-
-    socket.on('stop typing', (data: any) => {
-      this.removeChatTyping(data);
-    });
-
-    socket.on('roomUsers', ({ room, users }: { room: any; users: any }) => {
-      this.outputRoomName(room);
-      this.outputUsers(users);
-    });
-
-    // socket.on('message', (message) => {
-    //   console.log(message);
-    //   this.outputMessage(message);
-    //   this.chatMessages.nativeElement.scrollTop =
-    //     this.chatMessages?.nativeElement.scrollHeight;
-    // });
   }
 
   ngOnDestroy(): void {
-    // Clean up code or unsubscribe from observables if needed
+    clearInterval(this.timeInterval);
+    this.stopLocalStream();
+    if (this.myPeer) {
+      this.myPeer.destroy();
+    }
   }
 
-  connectToNewUser(userId: string, stream: MediaStream): void {
-    const call = this.myPeer.call(userId, stream);
-    const video = document.createElement('video');
+  // ── Controls ──────────────────────────────────────────────
 
-    call.on('stream', (userVideoStream: MediaStream) => {
-      console.log('stream 3', userVideoStream);
-      this.addVideoStream(video, userVideoStream, userId);
+  toggleMic(): void {
+    this.isMuted = !this.isMuted;
+    if (this.localStream) {
+      this.localStream.getAudioTracks().forEach((track) => {
+        track.enabled = !this.isMuted;
+      });
+    }
+  }
+
+  toggleCamera(): void {
+    this.isCameraOn = !this.isCameraOn;
+    if (this.localStream) {
+      this.localStream.getVideoTracks().forEach((track) => {
+        track.enabled = this.isCameraOn;
+      });
+    }
+  }
+
+  leaveCall(): void {
+    this.stopLocalStream();
+    if (this.myPeer) {
+      this.myPeer.destroy();
+    }
+    // Close the tab; fall back to blank page if window.close() is blocked
+    window.close();
+    setTimeout(() => {
+      window.location.href = 'about:blank';
+    }, 300);
+  }
+
+  // ── Internal helpers ──────────────────────────────────────
+
+  private connectToNewUser(userId: string, stream: MediaStream): void {
+    const call = this.myPeer.call(userId, stream);
+    if (!call) return;
+    const video = document.createElement('video');
+    video.setAttribute('playsinline', '');
+
+    call.on('stream', (remoteStream: MediaStream) => {
+      this.addRemoteStream(video, remoteStream, userId);
     });
     call.on('close', () => {
-      // video.remove()
-      console.log('a-a-a-a- colse');
-      video.parentElement?.remove();
+      this.removeParticipant(userId);
+    });
+    call.on('error', (err: any) => {
+      console.error('[PEER] outgoing call error:', err);
     });
 
     this.peers[userId] = call;
   }
 
-  addVideoStream(
+  private addRemoteStream(
     video: HTMLVideoElement,
     stream: MediaStream,
-    userId?: string
+    userId: string
   ): void {
+    // Don't add duplicate tile for the same peer
+    if (document.getElementById('tile-' + userId)) return;
+
     video.srcObject = stream;
+    video.setAttribute('playsinline', '');
     video.addEventListener('loadedmetadata', () => {
-      video.play();
+      video.play().catch(() => {});
     });
-    const videocontainer = document.createElement('div');
-    videocontainer.classList.add('video-participant');
-    // if (userId) {
-    //   videocontainer.id = userId;
-    // }
-    videocontainer.append(video);
-    this.videoGrid.nativeElement.append(videocontainer);
-  }
 
-  updateTyping(): void {
-    if (!this.typing) {
-      this.typing = true;
-      // Emit typing event to server
-    }
-    this.lastTypingTime = new Date().getTime();
+    const tile = document.createElement('div');
+    tile.classList.add('meet-video-tile');
+    tile.id = 'tile-' + userId;
+    tile.append(video);
 
-    setTimeout(() => {
-      const typingTimer = new Date().getTime();
-      const timeDiff = typingTimer - this.lastTypingTime;
-      if (timeDiff >= this.TYPING_TIMER_LENGTH && this.typing) {
-        // Emit stop typing event to server
-        this.typing = false;
-      }
-    }, this.TYPING_TIMER_LENGTH);
-  }
-
-  addChatTyping(data: any): void {
-    data.typing = true;
-    data.message = ' is typing..';
-    // Add typing message to UI
-  }
-
-  removeChatTyping(data: any): void {
-    const typingElement = document.getElementsByClassName('typing');
-    while (typingElement.length > 0) {
-      typingElement[0].remove();
+    if (this.videoGrid?.nativeElement) {
+      this.videoGrid.nativeElement.append(tile);
+      this.remoteCount++;
     }
   }
 
-  outputMessage(message: any): void {
-    // Output message to UI    
+  private removeParticipant(userId: string): void {
+    const tile = document.getElementById('tile-' + userId);
+    if (tile) {
+      tile.remove();
+      this.remoteCount = Math.max(0, this.remoteCount - 1);
+    }
   }
 
-  outputRoomName(room: any): void {
-    // Output room name to UI
-  }
-
-  outputUsers(users: any): void {
-    // Output user list to UI 
-  }
-
-  sendMessage(): void {
-    // Send message to server  
-  }
-
-  onSubmit(): void {
-    // Handle form submission
+  private stopLocalStream(): void {
+    if (this.localStream) {
+      this.localStream.getTracks().forEach((track) => track.stop());
+    }
   }
 }
