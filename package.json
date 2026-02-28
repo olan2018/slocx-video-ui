@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
+    "start": "serve -s dist/slocx-video-cha -l $PORT",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
@@ -27,6 +27,7 @@
     "socket.io-client": "^4.7.4",
     "tslib": "^2.3.0",
     "uuidv4": "^6.2.13",
+    "serve": "^14.2.0",
     "zone.js": "~0.13.0"
   },
   "devDependencies": {
