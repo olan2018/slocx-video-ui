@@ -78,21 +78,21 @@ export class ChatComponent implements OnInit, OnDestroy {
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:slocx.metered.ca:80' },
           {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
+            urls: 'turn:slocx.metered.ca:80',
+            username: 'adekunle.olanipekun.ko@gmail.com',
+            credential: 'kunle1374',
           },
           {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
+            urls: 'turn:slocx.metered.ca:443',
+            username: 'adekunle.olanipekun.ko@gmail.com',
+            credential: 'kunle1374',
           },
           {
-            urls: 'turns:openrelay.metered.ca:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject',
+            urls: 'turns:slocx.metered.ca:443?transport=tcp',
+            username: 'adekunle.olanipekun.ko@gmail.com',
+            credential: 'kunle1374',
           },
         ],
       },
@@ -227,7 +227,10 @@ export class ChatComponent implements OnInit, OnDestroy {
   ): void {
     const existingTile = document.getElementById('tile-' + userId);
     if (existingTile) {
-      // ICE renegotiation fired stream again — update srcObject on existing video
+      // ICE renegotiation fired stream again — pause first to avoid AbortError,
+      // then swap srcObject and resume
+      video.pause();
+      video.srcObject = null;
       video.srcObject = stream;
       video.play().catch(console.error);
       return;
