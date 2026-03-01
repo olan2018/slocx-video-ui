@@ -45,9 +45,13 @@ export class ChatComponent implements OnInit, OnDestroy {
   handRaised: boolean = false;
   raisedHands: Set<string> = new Set();
 
+  // Audio prompt (browser autoplay policy blocks unmuted playback)
+  showAudioPrompt: boolean = false;
+
   private myPeer!: Peer;
   private localStream!: MediaStream;
   private peers: { [key: string]: MediaConnection } = {};
+  private remoteVideos: HTMLVideoElement[] = [];
   private timeInterval!: any;
   private socket!: ReturnType<typeof io>;
   private myUsername: string = '';
@@ -267,6 +271,15 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
   }
 
+  enableAudio(): void {
+    // Called from a real user click — satisfies browser autoplay gesture requirement
+    this.remoteVideos.forEach((v) => {
+      v.muted = false;
+      if (v.paused) v.play().catch(() => {});
+    });
+    this.showAudioPrompt = false;
+  }
+
   leaveCall(): void {
     this.stopLocalStream();
     if (this.myPeer) {
@@ -346,6 +359,9 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.showHandIndicator(userId, true);
     }
 
+    // Track this video element so enableAudio() can unmute it on user click
+    this.remoteVideos.push(video);
+
     // Set stream after element is in DOM, then play
     video.setAttribute('playsinline', '');
     video.autoplay = true;
@@ -358,20 +374,16 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     video.play()
       .then(() => {
-        // Unmute immediately — works on desktop; silently stays muted on mobile
+        // Try to unmute — works on desktop Chrome; may silently stay muted on mobile
         video.muted = false;
-        if (video.muted) {
-          // Still muted (mobile autoplay policy) — show tap-to-unmute on tile
-          tile.setAttribute('data-muted', '1');
-          tile.title = 'Tap to enable audio';
-          tile.style.cursor = 'pointer';
-          tile.addEventListener('click', () => {
-            video.muted = false;
-            tile.removeAttribute('data-muted');
-            tile.title = '';
-            tile.style.cursor = '';
-          }, { once: true });
-        }
+        console.log(`[AUDIO] after unmute attempt: video.muted=${video.muted}`);
+        // After a short delay, verify muted status (browser may keep it muted)
+        setTimeout(() => {
+          if (video.muted) {
+            console.warn(`[AUDIO] video still muted for ${userId} — showing audio prompt`);
+            this.showAudioPrompt = true;
+          }
+        }, 300);
       })
       .catch((err) => {
         // AbortError is expected when renegotiation swaps srcObject before play() resolves
@@ -384,8 +396,16 @@ export class ChatComponent implements OnInit, OnDestroy {
   private removeParticipant(userId: string): void {
     const tile = document.getElementById('tile-' + userId);
     if (tile) {
+      const video = tile.querySelector('video') as HTMLVideoElement | null;
+      if (video) {
+        this.remoteVideos = this.remoteVideos.filter((v) => v !== video);
+      }
       tile.remove();
       this.remoteCount = Math.max(0, this.remoteCount - 1);
+    }
+    // Hide audio prompt if no more remote participants
+    if (this.remoteCount === 0) {
+      this.showAudioPrompt = false;
     }
   }
 

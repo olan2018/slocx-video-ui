@@ -42,6 +42,12 @@
     <!-- Remote video grid -->
     <div class="meet-video-grid" #videos [class.has-remotes]="remoteCount > 0"></div>
 
+    <!-- Audio blocked prompt -->
+    <div class="audio-prompt" *ngIf="showAudioPrompt" (click)="enableAudio()">
+      <i class="bi bi-volume-mute-fill"></i>
+      <span>Tap to enable audio</span>
+    </div>
+
     <!-- Local video PiP -->
     <div class="meet-pip" *ngIf="!permissionError">
       <video #localVideo autoplay muted playsinline></video>
