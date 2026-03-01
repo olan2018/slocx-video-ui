@@ -87,6 +87,17 @@
         <span class="meet-ctrl-label">{{ isCameraOn ? 'Stop video' : 'Start video' }}</span>
       </button>
 
+      <!-- Screen share -->
+      <button
+        class="meet-ctrl-btn"
+        [class.meet-ctrl-active]="isScreenSharing"
+        (click)="toggleScreenShare()"
+        [title]="isScreenSharing ? 'Stop sharing' : 'Share screen'"
+      >
+        <i class="bi bi-display"></i>
+        <span class="meet-ctrl-label">{{ isScreenSharing ? 'Stop share' : 'Share' }}</span>
+      </button>
+
       <!-- Raise hand -->
       <button
         class="meet-ctrl-btn"

@@ -48,6 +48,10 @@ export class ChatComponent implements OnInit, OnDestroy {
   // Audio prompt (browser autoplay policy blocks unmuted playback)
   showAudioPrompt: boolean = false;
 
+  // Screen sharing
+  isScreenSharing: boolean = false;
+  private screenStream: MediaStream | null = null;
+
   private myPeer!: Peer;
   private localStream!: MediaStream;
   private peers: { [key: string]: MediaConnection } = {};
@@ -266,6 +270,70 @@ export class ChatComponent implements OnInit, OnDestroy {
       event.preventDefault();
       this.sendMessage();
     }
+  }
+
+  async toggleScreenShare(): Promise<void> {
+    if (this.isScreenSharing) {
+      await this.stopScreenShare();
+    } else {
+      await this.startScreenShare();
+    }
+  }
+
+  private async startScreenShare(): Promise<void> {
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      this.screenStream = screenStream;
+      const screenTrack = screenStream.getVideoTracks()[0];
+
+      this.replaceVideoTrackInPeers(screenTrack);
+
+      if (this.localVideoEl?.nativeElement) {
+        this.localVideoEl.nativeElement.srcObject = screenStream;
+      }
+
+      this.isScreenSharing = true;
+
+      // Auto-revert when user clicks the browser's native "Stop sharing" button
+      screenTrack.addEventListener('ended', () => {
+        this.stopScreenShare();
+      });
+    } catch (err: any) {
+      if (err.name !== 'NotAllowedError') {
+        console.error('[SCREEN] getDisplayMedia error:', err);
+      }
+    }
+  }
+
+  private async stopScreenShare(): Promise<void> {
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach((t) => t.stop());
+      this.screenStream = null;
+    }
+
+    const cameraTrack = this.localStream?.getVideoTracks()[0];
+    if (cameraTrack) {
+      this.replaceVideoTrackInPeers(cameraTrack);
+    }
+
+    if (this.localVideoEl?.nativeElement) {
+      this.localVideoEl.nativeElement.srcObject = this.localStream;
+    }
+
+    this.isScreenSharing = false;
+  }
+
+  private replaceVideoTrackInPeers(newTrack: MediaStreamTrack): void {
+    Object.values(this.peers).forEach((call) => {
+      const pc: RTCPeerConnection = (call as any).peerConnection;
+      if (!pc) return;
+      const sender = pc.getSenders().find((s) => s.track?.kind === 'video');
+      if (sender) {
+        sender.replaceTrack(newTrack).catch((err) =>
+          console.error('[SCREEN] replaceTrack error:', err)
+        );
+      }
+    });
   }
 
   enableAudio(): void {
