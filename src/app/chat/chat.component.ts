@@ -10,6 +10,13 @@ import { io } from 'socket.io-client';
 import * as Qs from 'qs';
 import { environment } from '../../environments/environment';
 
+export interface ChatMessage {
+  username: string;
+  text: string;
+  timestamp: number;
+  self: boolean;
+}
+
 @Component({
   selector: 'app-chat',
   templateUrl: './chat.component.html',
@@ -28,12 +35,24 @@ export class ChatComponent implements OnInit, OnDestroy {
   remoteCount: number = 0;
   currentTime: Date = new Date();
 
+  // Chat
+  chatOpen: boolean = false;
+  chatMessages: ChatMessage[] = [];
+  chatInput: string = '';
+  unreadMessages: number = 0;
+
+  // Raise hand
+  handRaised: boolean = false;
+  raisedHands: Set<string> = new Set();
+
   private myPeer!: Peer;
   private localStream!: MediaStream;
   private peers: { [key: string]: MediaConnection } = {};
   private timeInterval!: any;
+  private socket!: ReturnType<typeof io>;
+  private myUsername: string = '';
 
-  constructor() { }
+  constructor() {}
 
   ngOnInit(): void {
     this.timeInterval = setInterval(() => {
@@ -44,31 +63,62 @@ export class ChatComponent implements OnInit, OnDestroy {
       ignoreQueryPrefix: true,
     });
 
-    const socket = io(environment.socketUrl);
+    this.myUsername = (username as string) || 'Me';
 
-    socket.on('connect', () => {
+    this.socket = io(environment.socketUrl);
+
+    this.socket.on('connect', () => {
       console.log('[SOCKET] connected');
     });
-    socket.on('disconnect', (reason: string) => {
+    this.socket.on('disconnect', (reason: string) => {
       console.warn('[SOCKET] disconnected:', reason);
     });
-    socket.on('connect_error', (err: Error) => {
+    this.socket.on('connect_error', (err: Error) => {
       console.error('[SOCKET] connect_error:', err.message);
     });
 
-    socket.on('roomNotValid', () => {
+    this.socket.on('roomNotValid', () => {
       this.connectionError = true;
       this.connectionErrorMsg = 'This classroom link is invalid or the lesson has not started yet.';
     });
 
-    socket.on('doNotBelongToClass', () => {
+    this.socket.on('doNotBelongToClass', () => {
       this.connectionError = true;
       this.connectionErrorMsg = 'You are not a participant of this lesson.';
     });
 
-    socket.on('sameName', () => {
+    this.socket.on('sameName', () => {
       this.connectionError = true;
       this.connectionErrorMsg = 'You are already connected to this lesson from another window.';
+    });
+
+    // Chat messages from others
+    this.socket.on('chat-message', (msg: { username: string; text: string; timestamp: number }) => {
+      this.chatMessages.push({ ...msg, self: false });
+      if (!this.chatOpen) {
+        this.unreadMessages++;
+      }
+      setTimeout(() => this.scrollChatToBottom(), 0);
+    });
+
+    // Raise hand events
+    this.socket.on('user-raised-hand', (peerId: string) => {
+      this.raisedHands.add(peerId);
+      this.showHandIndicator(peerId, true);
+    });
+    this.socket.on('user-lowered-hand', (peerId: string) => {
+      this.raisedHands.delete(peerId);
+      this.showHandIndicator(peerId, false);
+    });
+
+    // Remote user left — handled separately so we can clean up raised hands too
+    this.socket.on('user-disconnected', (userId: string) => {
+      this.raisedHands.delete(userId);
+      if (this.peers[userId]) {
+        this.peers[userId].close();
+        delete this.peers[userId];
+      }
+      this.removeParticipant(userId);
     });
 
     this.myPeer = new Peer('', {
@@ -76,57 +126,34 @@ export class ChatComponent implements OnInit, OnDestroy {
       path: '/',
       secure: true,
       config: {
-        // iceServers: [
-        //   { urls: 'stun:stun.l.google.com:19302' },
-        //   { urls: 'stun:stun1.l.google.com:19302' },
-        //   { urls: 'stun:slocx.metered.live:80' },
-        //   {
-        //     urls: 'turn:slocx.metered.live:80',
-        //     username: '6cd2bd6552c9c01f4bb75822',
-        //     credential: 'NnRurMddTHIbVDV9',
-        //   },
-        //   {
-        //     urls: 'turn:slocx.metered.live:443',
-        //     username: '6cd2bd6552c9c01f4bb75822',
-        //     credential: 'NnRurMddTHIbVDV9',
-        //   },
-        //   {
-        //     urls: 'turns:slocx.metered.live:443?transport=tcp',
-        //     username: '6cd2bd6552c9c01f4bb75822',
-        //     credential: 'NnRurMddTHIbVDV9',
-        //   },
-        // ],
-
         iceServers: [
+          { urls: 'stun:stun.relay.metered.ca:80' },
           {
-            urls: "stun:stun.relay.metered.ca:80",
+            urls: 'turn:global.relay.metered.ca:80',
+            username: '6cd2bd6552c9c01f4bb75822',
+            credential: 'NnRurMddTHIbVDV9',
           },
           {
-            urls: "turn:global.relay.metered.ca:80",
-            username: "6cd2bd6552c9c01f4bb75822",
-            credential: "NnRurMddTHIbVDV9",
+            urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+            username: '6cd2bd6552c9c01f4bb75822',
+            credential: 'NnRurMddTHIbVDV9',
           },
           {
-            urls: "turn:global.relay.metered.ca:80?transport=tcp",
-            username: "6cd2bd6552c9c01f4bb75822",
-            credential: "NnRurMddTHIbVDV9",
+            urls: 'turn:global.relay.metered.ca:443',
+            username: '6cd2bd6552c9c01f4bb75822',
+            credential: 'NnRurMddTHIbVDV9',
           },
           {
-            urls: "turn:global.relay.metered.ca:443",
-            username: "6cd2bd6552c9c01f4bb75822",
-            credential: "NnRurMddTHIbVDV9",
-          },
-          {
-            urls: "turns:global.relay.metered.ca:443?transport=tcp",
-            username: "6cd2bd6552c9c01f4bb75822",
-            credential: "NnRurMddTHIbVDV9",
+            urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+            username: '6cd2bd6552c9c01f4bb75822',
+            credential: 'NnRurMddTHIbVDV9',
           },
         ],
       },
     });
 
     this.myPeer.on('open', (userPeerId: string) => {
-      socket.emit('joinRoom', { userPeerId, username, room });
+      this.socket.emit('joinRoom', { userPeerId, username, room });
     });
 
     this.myPeer.on('error', (err: any) => {
@@ -138,11 +165,10 @@ export class ChatComponent implements OnInit, OnDestroy {
       .then((stream) => {
         this.localStream = stream;
 
-        // Show local video in PiP — use setTimeout to wait for ViewChild
         setTimeout(() => {
           if (this.localVideoEl?.nativeElement) {
             this.localVideoEl.nativeElement.srcObject = stream;
-            this.localVideoEl.nativeElement.play().catch(() => { });
+            this.localVideoEl.nativeElement.play().catch(() => {});
           }
         }, 0);
 
@@ -163,11 +189,11 @@ export class ChatComponent implements OnInit, OnDestroy {
           call.on('error', (err: any) => {
             console.error('[PEER] call error:', err);
           });
-          this.attachIceDebug(call, call.peer, 'incoming');
+          this.attachIceDebug(call, call.peer, 'incoming', video);
         });
 
         // New user joined — call them
-        socket.on('user-connected', (userPeerId: string) => {
+        this.socket.on('user-connected', (userPeerId: string) => {
           setTimeout(() => {
             this.connectToNewUser(userPeerId, stream);
           }, 1000);
@@ -177,15 +203,6 @@ export class ChatComponent implements OnInit, OnDestroy {
         console.error('[MEDIA] getUserMedia error:', err);
         this.permissionError = true;
       });
-
-    // Remote user left
-    socket.on('user-disconnected', (userId: string) => {
-      if (this.peers[userId]) {
-        this.peers[userId].close();
-        delete this.peers[userId];
-      }
-      this.removeParticipant(userId);
-    });
   }
 
   ngOnDestroy(): void {
@@ -216,12 +233,45 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
   }
 
+  toggleHand(): void {
+    this.handRaised = !this.handRaised;
+    this.socket.emit(this.handRaised ? 'raise-hand' : 'lower-hand');
+  }
+
+  toggleChat(): void {
+    this.chatOpen = !this.chatOpen;
+    if (this.chatOpen) {
+      this.unreadMessages = 0;
+      setTimeout(() => this.scrollChatToBottom(), 0);
+    }
+  }
+
+  sendMessage(): void {
+    const text = this.chatInput.trim();
+    if (!text) return;
+    this.socket.emit('chat-message', { text });
+    this.chatMessages.push({
+      username: this.myUsername,
+      text,
+      timestamp: Date.now(),
+      self: true,
+    });
+    this.chatInput = '';
+    setTimeout(() => this.scrollChatToBottom(), 0);
+  }
+
+  onChatKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.sendMessage();
+    }
+  }
+
   leaveCall(): void {
     this.stopLocalStream();
     if (this.myPeer) {
       this.myPeer.destroy();
     }
-    // Close the tab; fall back to blank page if window.close() is blocked
     window.close();
     setTimeout(() => {
       window.location.href = 'about:blank';
@@ -249,7 +299,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       console.error('[PEER] outgoing call error:', err);
     });
 
-    this.attachIceDebug(call, userId, 'outgoing');
+    this.attachIceDebug(call, userId, 'outgoing', video);
     this.peers[userId] = call;
   }
 
@@ -258,10 +308,17 @@ export class ChatComponent implements OnInit, OnDestroy {
     stream: MediaStream,
     userId: string
   ): void {
+    // Log stream track states for diagnosis
+    const vTracks = stream.getVideoTracks();
+    const aTracks = stream.getAudioTracks();
+    console.log(`[STREAM] ${userId} — videoTracks: ${vTracks.length}, audioTracks: ${aTracks.length}`);
+    vTracks.forEach((t) =>
+      console.log(`  [TRACK] video: enabled=${t.enabled}, readyState=${t.readyState}, muted=${t.muted}`)
+    );
+
     const existingTile = document.getElementById('tile-' + userId);
     if (existingTile) {
-      // ICE renegotiation — swap srcObject directly without pausing
-      // (pausing would abort any pending play() promise causing AbortError)
+      // ICE renegotiation — swap srcObject without pausing (avoids AbortError)
       console.log(`[STREAM] renegotiation for ${userId}, swapping srcObject`);
       video.srcObject = stream;
       video.muted = false;
@@ -284,11 +341,21 @@ export class ChatComponent implements OnInit, OnDestroy {
     grid.append(tile);
     this.remoteCount++;
 
+    // Show raised hand badge if already raised before tile appeared
+    if (this.raisedHands.has(userId)) {
+      this.showHandIndicator(userId, true);
+    }
+
     // Set stream after element is in DOM, then play
     video.setAttribute('playsinline', '');
     video.autoplay = true;
     video.muted = true; // Start muted — required for autoplay on mobile
     video.srcObject = stream;
+
+    video.addEventListener('loadedmetadata', () => {
+      console.log(`[VIDEO] loadedmetadata for ${userId}: ${video.videoWidth}x${video.videoHeight}`);
+    });
+
     video.play()
       .then(() => {
         // Unmute immediately — works on desktop; silently stays muted on mobile
@@ -322,8 +389,33 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
   }
 
-  private attachIceDebug(call: MediaConnection, userId: string, dir: string): void {
-    // Wait a tick for PeerJS to create peerConnection internally
+  private showHandIndicator(peerId: string, raised: boolean): void {
+    const tile = document.getElementById('tile-' + peerId);
+    if (!tile) return;
+    let badge = tile.querySelector('.hand-raise-badge') as HTMLElement | null;
+    if (raised) {
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'hand-raise-badge';
+        badge.textContent = '✋';
+        tile.appendChild(badge);
+      }
+    } else {
+      badge?.remove();
+    }
+  }
+
+  private scrollChatToBottom(): void {
+    const el = document.querySelector('.chat-messages') as HTMLElement | null;
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  private attachIceDebug(
+    call: MediaConnection,
+    userId: string,
+    dir: string,
+    video?: HTMLVideoElement
+  ): void {
     setTimeout(() => {
       const pc: RTCPeerConnection = (call as any).peerConnection;
       if (!pc) {
@@ -331,49 +423,81 @@ export class ChatComponent implements OnInit, OnDestroy {
         return;
       }
 
-      pc.oniceconnectionstatechange = () => {
+      // Log the state right now — we may have already missed early transitions
+      console.log(
+        `[ICE][${dir}][${userId}] INIT: ice=${pc.iceConnectionState}, conn=${pc.connectionState}, signaling=${pc.signalingState}`
+      );
+
+      // Use addEventListener (not onXxx) so we don't overwrite PeerJS's own handlers
+      pc.addEventListener('iceconnectionstatechange', () => {
         console.log(`[ICE][${dir}][${userId}] iceConnectionState → ${pc.iceConnectionState}`);
         if (pc.iceConnectionState === 'failed') {
-          console.error(`[ICE][${dir}][${userId}] ICE FAILED — no path could be established. Check TURN server.`);
+          console.error(`[ICE][${dir}][${userId}] ICE FAILED — no relay path. Check TURN credentials.`);
         }
         if (pc.iceConnectionState === 'disconnected') {
           console.warn(`[ICE][${dir}][${userId}] ICE disconnected — may recover or fail`);
         }
-      };
+        // ICE connected/completed → force video to play if it got stuck
+        if (
+          (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') &&
+          video
+        ) {
+          console.log(`[ICE][${dir}][${userId}] ICE connected — forcing video play`);
+          video.muted = false;
+          if (video.paused) {
+            video.play().catch(() => {});
+          }
+        }
+      });
 
-      pc.onicegatheringstatechange = () => {
+      pc.addEventListener('icegatheringstatechange', () => {
         console.log(`[ICE][${dir}][${userId}] iceGatheringState → ${pc.iceGatheringState}`);
-      };
+      });
 
-      pc.onicecandidate = (event) => {
+      pc.addEventListener('icecandidate', (event) => {
         if (!event.candidate) {
           console.log(`[ICE][${dir}][${userId}] candidate gathering complete`);
           return;
         }
         const c = event.candidate;
-        console.log(`[ICE][${dir}][${userId}] candidate: type=${c.type} protocol=${c.protocol} address=${c.address}`);
-      };
+        console.log(
+          `[ICE][${dir}][${userId}] candidate: type=${c.type} protocol=${c.protocol} address=${c.address}`
+        );
+      });
 
-      // Log the selected candidate pair once connected
-      pc.onconnectionstatechange = () => {
+      pc.addEventListener('connectionstatechange', () => {
         console.log(`[ICE][${dir}][${userId}] connectionState → ${pc.connectionState}`);
         if (pc.connectionState === 'connected') {
+          // Log which candidate pair was selected
           pc.getStats().then((stats) => {
             stats.forEach((report) => {
-              if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
-                const local = (stats as any).get(report.localCandidateId);
-                const remote = (stats as any).get(report.remoteCandidateId);
+              if (
+                report.type === 'candidate-pair' &&
+                (report as any).state === 'succeeded' &&
+                (report as any).nominated
+              ) {
+                const local = (stats as any).get((report as any).localCandidateId);
+                const remote = (stats as any).get((report as any).remoteCandidateId);
                 const localType = local?.candidateType ?? '?';
                 const remoteType = remote?.candidateType ?? '?';
                 console.log(
                   `[ICE][${dir}][${userId}] ✅ SELECTED PAIR — local: ${localType}, remote: ${remoteType}` +
-                  (localType === 'relay' || remoteType === 'relay' ? ' ← TURN relay in use' : ' ← direct/STUN path')
+                    (localType === 'relay' || remoteType === 'relay'
+                      ? ' ← TURN relay in use'
+                      : ' ← direct/STUN path')
                 );
               }
             });
           });
+          // Force video play when fully connected
+          if (video) {
+            video.muted = false;
+            if (video.paused) {
+              video.play().catch(() => {});
+            }
+          }
         }
-      };
+      });
     }, 0);
   }
 

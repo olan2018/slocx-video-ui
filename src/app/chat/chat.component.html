@@ -48,6 +48,7 @@
       <div class="meet-pip-overlay">
         <span class="meet-name-tag">You</span>
         <div class="meet-pip-badges">
+          <span *ngIf="handRaised" class="pip-hand-badge">✋</span>
           <i class="bi bi-mic-mute-fill" *ngIf="isMuted" style="color:#ea4335"></i>
           <i class="bi bi-camera-video-off-fill" *ngIf="!isCameraOn" style="color:#ea4335; margin-left:4px"></i>
         </div>
@@ -80,10 +81,77 @@
         <span class="meet-ctrl-label">{{ isCameraOn ? 'Stop video' : 'Start video' }}</span>
       </button>
 
+      <!-- Raise hand -->
+      <button
+        class="meet-ctrl-btn"
+        [class.meet-ctrl-hand]="handRaised"
+        (click)="toggleHand()"
+        [title]="handRaised ? 'Lower hand' : 'Raise hand'"
+      >
+        <i class="bi bi-hand-index-thumb-fill"></i>
+        <span class="meet-ctrl-label">{{ handRaised ? 'Lower' : 'Hand' }}</span>
+      </button>
+
+      <!-- Chat -->
+      <button
+        class="meet-ctrl-btn meet-ctrl-chat-btn"
+        [class.meet-ctrl-active]="chatOpen"
+        (click)="toggleChat()"
+        title="Chat"
+      >
+        <span class="chat-btn-inner">
+          <i class="bi bi-chat-fill"></i>
+          <span class="chat-unread-badge" *ngIf="unreadMessages > 0">{{ unreadMessages > 9 ? '9+' : unreadMessages }}</span>
+        </span>
+        <span class="meet-ctrl-label">Chat</span>
+      </button>
+
       <!-- Leave -->
       <button class="meet-ctrl-btn meet-ctrl-leave" (click)="leaveCall()" title="Leave call">
         <i class="bi bi-telephone-x-fill"></i>
         <span class="meet-ctrl-label">Leave</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Chat panel (slides in from right) -->
+  <div class="chat-panel" [class.chat-panel--open]="chatOpen">
+    <div class="chat-header">
+      <span class="chat-header-title">In-call messages</span>
+      <button class="chat-close-btn" (click)="toggleChat()" title="Close chat">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>
+
+    <div class="chat-messages">
+      <div *ngIf="chatMessages.length === 0" class="chat-empty">
+        <i class="bi bi-chat-dots"></i>
+        <p>No messages yet</p>
+      </div>
+      <div
+        *ngFor="let msg of chatMessages"
+        class="chat-msg"
+        [class.chat-msg--self]="msg.self"
+      >
+        <div class="chat-msg-meta">
+          <span class="chat-msg-sender">{{ msg.self ? 'You' : msg.username }}</span>
+          <span class="chat-msg-time">{{ msg.timestamp | date:'HH:mm' }}</span>
+        </div>
+        <div class="chat-msg-bubble">{{ msg.text }}</div>
+      </div>
+    </div>
+
+    <div class="chat-input-row">
+      <input
+        class="chat-input"
+        [(ngModel)]="chatInput"
+        (keydown)="onChatKeyDown($event)"
+        placeholder="Send a message..."
+        maxlength="500"
+        autocomplete="off"
+      />
+      <button class="chat-send-btn" (click)="sendMessage()" [disabled]="!chatInput.trim()">
+        <i class="bi bi-send-fill"></i>
       </button>
     </div>
   </div>
