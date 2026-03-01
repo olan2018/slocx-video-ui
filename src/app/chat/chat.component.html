@@ -49,7 +49,7 @@
     </div>
 
     <!-- Local video PiP -->
-    <div class="meet-pip" *ngIf="!permissionError">
+    <div class="meet-pip" [class.screen-sharing]="isScreenSharing" *ngIf="!permissionError">
       <video #localVideo autoplay muted playsinline></video>
       <div class="meet-pip-overlay">
         <span class="meet-name-tag">You</span>

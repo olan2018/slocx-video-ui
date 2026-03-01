@@ -128,6 +128,14 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.showHandIndicator(peerId, false);
     });
 
+    // Screen share state from remote peers — toggle CSS mirror flip on their tile
+    this.socket.on('user-started-screen-share', (peerId: string) => {
+      document.getElementById('tile-' + peerId)?.classList.add('screen-sharing');
+    });
+    this.socket.on('user-stopped-screen-share', (peerId: string) => {
+      document.getElementById('tile-' + peerId)?.classList.remove('screen-sharing');
+    });
+
     // Remote user left — handled separately so we can clean up raised hands too
     this.socket.on('user-disconnected', (userId: string) => {
       this.raisedHands.delete(userId);
@@ -311,6 +319,7 @@ export class ChatComponent implements OnInit, OnDestroy {
       }
 
       this.isScreenSharing = true;
+      this.socket.emit('start-screen-share');
 
       // Auto-revert when user clicks the browser's native "Stop sharing" button
       screenTrack.addEventListener('ended', () => {
@@ -339,6 +348,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
 
     this.isScreenSharing = false;
+    this.socket.emit('stop-screen-share');
   }
 
   private replaceVideoTrackInPeers(newTrack: MediaStreamTrack): void {

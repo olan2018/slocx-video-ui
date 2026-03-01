@@ -132,6 +132,10 @@
   transform: scaleX(-1);
   display: block;
 }
+/* Remove mirror flip when remote peer is screen sharing */
+:host ::ng-deep .meet-video-tile.screen-sharing video {
+  transform: none;
+}
 
 /* ── Raise hand badge on remote tiles ────────────────────── */
 :host ::ng-deep .hand-raise-badge {
@@ -174,6 +178,10 @@
   object-fit: cover;
   transform: scaleX(-1);
   display: block;
+}
+/* Remove mirror flip on local PiP when screen sharing */
+.meet-pip.screen-sharing video {
+  transform: none;
 }
 .meet-pip-overlay {
   position: absolute;
