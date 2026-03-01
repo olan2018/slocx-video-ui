@@ -33,7 +33,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   private peers: { [key: string]: MediaConnection } = {};
   private timeInterval!: any;
 
-  constructor() {}
+  constructor() { }
 
   ngOnInit(): void {
     this.timeInterval = setInterval(() => {
@@ -76,24 +76,50 @@ export class ChatComponent implements OnInit, OnDestroy {
       path: '/',
       secure: true,
       config: {
+        // iceServers: [
+        //   { urls: 'stun:stun.l.google.com:19302' },
+        //   { urls: 'stun:stun1.l.google.com:19302' },
+        //   { urls: 'stun:slocx.metered.live:80' },
+        //   {
+        //     urls: 'turn:slocx.metered.live:80',
+        //     username: '6cd2bd6552c9c01f4bb75822',
+        //     credential: 'NnRurMddTHIbVDV9',
+        //   },
+        //   {
+        //     urls: 'turn:slocx.metered.live:443',
+        //     username: '6cd2bd6552c9c01f4bb75822',
+        //     credential: 'NnRurMddTHIbVDV9',
+        //   },
+        //   {
+        //     urls: 'turns:slocx.metered.live:443?transport=tcp',
+        //     username: '6cd2bd6552c9c01f4bb75822',
+        //     credential: 'NnRurMddTHIbVDV9',
+        //   },
+        // ],
+
         iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:slocx.metered.live:80' },
           {
-            urls: 'turn:slocx.metered.live:80',
-            username: '6cd2bd6552c9c01f4bb75822',
-            credential: 'NnRurMddTHIbVDV9',
+            urls: "stun:stun.relay.metered.ca:80",
           },
           {
-            urls: 'turn:slocx.metered.live:443',
-            username: '6cd2bd6552c9c01f4bb75822',
-            credential: 'NnRurMddTHIbVDV9',
+            urls: "turn:global.relay.metered.ca:80",
+            username: "6cd2bd6552c9c01f4bb75822",
+            credential: "NnRurMddTHIbVDV9",
           },
           {
-            urls: 'turns:slocx.metered.live:443?transport=tcp',
-            username: '6cd2bd6552c9c01f4bb75822',
-            credential: 'NnRurMddTHIbVDV9',
+            urls: "turn:global.relay.metered.ca:80?transport=tcp",
+            username: "6cd2bd6552c9c01f4bb75822",
+            credential: "NnRurMddTHIbVDV9",
+          },
+          {
+            urls: "turn:global.relay.metered.ca:443",
+            username: "6cd2bd6552c9c01f4bb75822",
+            credential: "NnRurMddTHIbVDV9",
+          },
+          {
+            urls: "turns:global.relay.metered.ca:443?transport=tcp",
+            username: "6cd2bd6552c9c01f4bb75822",
+            credential: "NnRurMddTHIbVDV9",
           },
         ],
       },
@@ -116,7 +142,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         setTimeout(() => {
           if (this.localVideoEl?.nativeElement) {
             this.localVideoEl.nativeElement.srcObject = stream;
-            this.localVideoEl.nativeElement.play().catch(() => {});
+            this.localVideoEl.nativeElement.play().catch(() => { });
           }
         }, 0);
 
@@ -234,12 +260,16 @@ export class ChatComponent implements OnInit, OnDestroy {
   ): void {
     const existingTile = document.getElementById('tile-' + userId);
     if (existingTile) {
-      // ICE renegotiation fired stream again — pause first to avoid AbortError,
-      // then swap srcObject and resume
-      video.pause();
-      video.srcObject = null;
+      // ICE renegotiation — swap srcObject directly without pausing
+      // (pausing would abort any pending play() promise causing AbortError)
+      console.log(`[STREAM] renegotiation for ${userId}, swapping srcObject`);
       video.srcObject = stream;
-      video.play().catch(console.error);
+      video.muted = false;
+      video.play().catch((err) => {
+        if (err.name !== 'AbortError') {
+          console.error(`[STREAM] renegotiation play() error for ${userId}:`, err);
+        }
+      });
       return;
     }
 
@@ -276,7 +306,12 @@ export class ChatComponent implements OnInit, OnDestroy {
           }, { once: true });
         }
       })
-      .catch(console.error);
+      .catch((err) => {
+        // AbortError is expected when renegotiation swaps srcObject before play() resolves
+        if (err.name !== 'AbortError') {
+          console.error(`[STREAM] play() error for ${userId}:`, err);
+        }
+      });
   }
 
   private removeParticipant(userId: string): void {
