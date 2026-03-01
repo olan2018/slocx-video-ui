@@ -11,7 +11,8 @@ import * as Qs from 'qs';
 import { environment } from '../../environments/environment';
 
 export interface ChatMessage {
-  username: string;
+  displayName: string;
+  avatarUrl: string;
   text: string;
   timestamp: number;
   self: boolean;
@@ -59,6 +60,9 @@ export class ChatComponent implements OnInit, OnDestroy {
   private timeInterval!: any;
   private socket!: ReturnType<typeof io>;
   private myUsername: string = '';
+  myDisplayName: string = 'Me';
+  myAvatarUrl: string = '';
+  private peerProfiles: Map<string, { name: string; avatar: string }> = new Map();
 
   constructor() {}
 
@@ -67,11 +71,13 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.currentTime = new Date();
     }, 1000);
 
-    const { user: username, room } = Qs.parse(location.search, {
+    const { user: username, room, name, photo } = Qs.parse(location.search, {
       ignoreQueryPrefix: true,
     });
 
     this.myUsername = (username as string) || 'Me';
+    this.myDisplayName = (name as string) || this.myUsername;
+    this.myAvatarUrl = (photo as string) || '';
 
     this.socket = io(environment.socketUrl);
 
@@ -101,7 +107,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     });
 
     // Chat messages from others
-    this.socket.on('chat-message', (msg: { username: string; text: string; timestamp: number }) => {
+    this.socket.on('chat-message', (msg: { displayName: string; avatarUrl: string; text: string; timestamp: number }) => {
       this.chatMessages.push({ ...msg, self: false });
       if (!this.chatOpen) {
         this.unreadMessages++;
@@ -122,6 +128,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     // Remote user left — handled separately so we can clean up raised hands too
     this.socket.on('user-disconnected', (userId: string) => {
       this.raisedHands.delete(userId);
+      this.peerProfiles.delete(userId);
       if (this.peers[userId]) {
         this.peers[userId].close();
         delete this.peers[userId];
@@ -157,7 +164,13 @@ export class ChatComponent implements OnInit, OnDestroy {
         });
 
         this.myPeer.on('open', (userPeerId: string) => {
-          this.socket.emit('joinRoom', { userPeerId, username, room });
+          this.socket.emit('joinRoom', {
+            userPeerId,
+            username,
+            room,
+            displayName: this.myDisplayName,
+            avatarUrl: this.myAvatarUrl,
+          });
         });
 
         this.myPeer.on('error', (err: any) => {
@@ -197,9 +210,10 @@ export class ChatComponent implements OnInit, OnDestroy {
             });
 
             // New user joined — call them
-            this.socket.on('user-connected', (userPeerId: string) => {
+            this.socket.on('user-connected', (data: { peerId: string; displayName: string; avatarUrl: string }) => {
+              this.peerProfiles.set(data.peerId, { name: data.displayName, avatar: data.avatarUrl });
               setTimeout(() => {
-                this.connectToNewUser(userPeerId, stream);
+                this.connectToNewUser(data.peerId, stream);
               }, 1000);
             });
           })
@@ -256,7 +270,8 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (!text) return;
     this.socket.emit('chat-message', { text });
     this.chatMessages.push({
-      username: this.myUsername,
+      displayName: this.myDisplayName,
+      avatarUrl: this.myAvatarUrl,
       text,
       timestamp: Date.now(),
       self: true,

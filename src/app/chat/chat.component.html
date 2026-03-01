@@ -150,11 +150,20 @@
         class="chat-msg"
         [class.chat-msg--self]="msg.self"
       >
-        <div class="chat-msg-meta">
-          <span class="chat-msg-sender">{{ msg.self ? 'You' : msg.username }}</span>
-          <span class="chat-msg-time">{{ msg.timestamp | date:'HH:mm' }}</span>
+        <div class="chat-msg-row">
+          <!-- Avatar for others (left side) -->
+          <div class="chat-avatar" *ngIf="!msg.self">
+            <img *ngIf="msg.avatarUrl" [src]="msg.avatarUrl" [alt]="msg.displayName" class="chat-avatar-img" />
+            <span *ngIf="!msg.avatarUrl" class="chat-avatar-initials">{{ msg.displayName ? msg.displayName[0].toUpperCase() : '?' }}</span>
+          </div>
+          <div class="chat-msg-content">
+            <div class="chat-msg-meta">
+              <span class="chat-msg-sender">{{ msg.self ? 'You' : msg.displayName }}</span>
+              <span class="chat-msg-time">{{ msg.timestamp | date:'HH:mm' }}</span>
+            </div>
+            <div class="chat-msg-bubble">{{ msg.text }}</div>
+          </div>
         </div>
-        <div class="chat-msg-bubble">{{ msg.text }}</div>
       </div>
     </div>
 
