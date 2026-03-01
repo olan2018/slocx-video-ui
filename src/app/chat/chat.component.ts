@@ -131,26 +131,22 @@ export class ChatComponent implements OnInit, OnDestroy {
       secure: true,
       config: {
         iceServers: [
-          { urls: 'stun:stun.relay.metered.ca:80' },
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
           {
-            urls: 'turn:global.relay.metered.ca:80',
-            username: '6cd2bd6552c9c01f4bb75822',
-            credential: 'NnRurMddTHIbVDV9',
+            urls: `turn:${environment.turnUrl}:3478`,
+            username: environment.turnUsername,
+            credential: environment.turnCredential,
           },
           {
-            urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-            username: '6cd2bd6552c9c01f4bb75822',
-            credential: 'NnRurMddTHIbVDV9',
+            urls: `turn:${environment.turnUrl}:3478?transport=tcp`,
+            username: environment.turnUsername,
+            credential: environment.turnCredential,
           },
           {
-            urls: 'turn:global.relay.metered.ca:443',
-            username: '6cd2bd6552c9c01f4bb75822',
-            credential: 'NnRurMddTHIbVDV9',
-          },
-          {
-            urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-            username: '6cd2bd6552c9c01f4bb75822',
-            credential: 'NnRurMddTHIbVDV9',
+            urls: `turns:${environment.turnUrl}:5349`,
+            username: environment.turnUsername,
+            credential: environment.turnCredential,
           },
         ],
       },

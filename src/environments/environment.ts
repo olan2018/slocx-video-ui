@@ -6,6 +6,10 @@ export const environment = {
   production: false,
   socketUrl: 'https://video-call-slocx.onrender.com',
   peerHost: 'slocx-0-0-2.onrender.com',
+  // TURN server — swap these when you move to self-hosted coturn
+  turnUrl: 'turn.slocx.com',
+  turnUsername: 'slocx',
+  turnCredential: 'Kunle1374@@#',
 };
 
 /*
