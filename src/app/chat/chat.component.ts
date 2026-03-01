@@ -125,83 +125,84 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.removeParticipant(userId);
     });
 
-    this.myPeer = new Peer('', {
-      host: environment.peerHost,
-      path: '/',
-      secure: true,
-      config: {
-        iceServers: [
+    // Fetch fresh Cloudflare TURN credentials from backend, fall back to env values
+    fetch(`${environment.apiUrl}/v1/turn/credentials`)
+      .then((res) => (res.ok ? res.json() : null))
+      .catch(() => null)
+      .then((data: any) => {
+        const cfIce = data?.iceServers;
+        const iceServers: any[] = [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          {
-            urls: `turn:${environment.turnUrl}:3478`,
+          cfIce ?? {
+            urls: [
+              `turn:${environment.turnUrl}:3478`,
+              `turn:${environment.turnUrl}:3478?transport=tcp`,
+              `turns:${environment.turnUrl}:5349`,
+            ],
             username: environment.turnUsername,
             credential: environment.turnCredential,
           },
-          {
-            urls: `turn:${environment.turnUrl}:3478?transport=tcp`,
-            username: environment.turnUsername,
-            credential: environment.turnCredential,
-          },
-          {
-            urls: `turns:${environment.turnUrl}:5349`,
-            username: environment.turnUsername,
-            credential: environment.turnCredential,
-          },
-        ],
-      },
-    });
+        ];
 
-    this.myPeer.on('open', (userPeerId: string) => {
-      this.socket.emit('joinRoom', { userPeerId, username, room });
-    });
-
-    this.myPeer.on('error', (err: any) => {
-      console.error('[PEER] error:', err);
-    });
-
-    navigator.mediaDevices
-      .getUserMedia({ video: true, audio: true })
-      .then((stream) => {
-        this.localStream = stream;
-
-        setTimeout(() => {
-          if (this.localVideoEl?.nativeElement) {
-            this.localVideoEl.nativeElement.srcObject = stream;
-            this.localVideoEl.nativeElement.play().catch(() => {});
-          }
-        }, 0);
-
-        // Answer incoming PeerJS calls
-        this.myPeer.on('call', (call: MediaConnection) => {
-          call.answer(stream);
-          const video = document.createElement('video');
-          video.setAttribute('playsinline', '');
-          video.autoplay = true;
-          call.on('stream', (remoteStream: MediaStream) => {
-            console.log(`[STREAM] incoming call stream fired for ${call.peer}`);
-            this.addRemoteStream(video, remoteStream, call.peer);
-          });
-          call.on('close', () => {
-            console.warn(`[PEER] incoming call closed for ${call.peer}`);
-            this.removeParticipant(call.peer);
-          });
-          call.on('error', (err: any) => {
-            console.error('[PEER] call error:', err);
-          });
-          this.attachIceDebug(call, call.peer, 'incoming', video);
+        this.myPeer = new Peer('', {
+          host: environment.peerHost,
+          path: '/',
+          secure: true,
+          config: { iceServers },
         });
 
-        // New user joined — call them
-        this.socket.on('user-connected', (userPeerId: string) => {
-          setTimeout(() => {
-            this.connectToNewUser(userPeerId, stream);
-          }, 1000);
+        this.myPeer.on('open', (userPeerId: string) => {
+          this.socket.emit('joinRoom', { userPeerId, username, room });
         });
-      })
-      .catch((err) => {
-        console.error('[MEDIA] getUserMedia error:', err);
-        this.permissionError = true;
+
+        this.myPeer.on('error', (err: any) => {
+          console.error('[PEER] error:', err);
+        });
+
+        navigator.mediaDevices
+          .getUserMedia({ video: true, audio: true })
+          .then((stream) => {
+            this.localStream = stream;
+
+            setTimeout(() => {
+              if (this.localVideoEl?.nativeElement) {
+                this.localVideoEl.nativeElement.srcObject = stream;
+                this.localVideoEl.nativeElement.play().catch(() => {});
+              }
+            }, 0);
+
+            // Answer incoming PeerJS calls
+            this.myPeer.on('call', (call: MediaConnection) => {
+              call.answer(stream);
+              const video = document.createElement('video');
+              video.setAttribute('playsinline', '');
+              video.autoplay = true;
+              call.on('stream', (remoteStream: MediaStream) => {
+                console.log(`[STREAM] incoming call stream fired for ${call.peer}`);
+                this.addRemoteStream(video, remoteStream, call.peer);
+              });
+              call.on('close', () => {
+                console.warn(`[PEER] incoming call closed for ${call.peer}`);
+                this.removeParticipant(call.peer);
+              });
+              call.on('error', (err: any) => {
+                console.error('[PEER] call error:', err);
+              });
+              this.attachIceDebug(call, call.peer, 'incoming', video);
+            });
+
+            // New user joined — call them
+            this.socket.on('user-connected', (userPeerId: string) => {
+              setTimeout(() => {
+                this.connectToNewUser(userPeerId, stream);
+              }, 1000);
+            });
+          })
+          .catch((err) => {
+            console.error('[MEDIA] getUserMedia error:', err);
+            this.permissionError = true;
+          });
       });
   }
 
