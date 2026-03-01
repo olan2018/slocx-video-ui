@@ -126,14 +126,17 @@ export class ChatComponent implements OnInit, OnDestroy {
           video.setAttribute('playsinline', '');
           video.autoplay = true;
           call.on('stream', (remoteStream: MediaStream) => {
+            console.log(`[STREAM] incoming call stream fired for ${call.peer}`);
             this.addRemoteStream(video, remoteStream, call.peer);
           });
           call.on('close', () => {
+            console.warn(`[PEER] incoming call closed for ${call.peer}`);
             this.removeParticipant(call.peer);
           });
           call.on('error', (err: any) => {
             console.error('[PEER] call error:', err);
           });
+          this.attachIceDebug(call, call.peer, 'incoming');
         });
 
         // New user joined — call them
@@ -208,15 +211,18 @@ export class ChatComponent implements OnInit, OnDestroy {
     video.autoplay = true;
 
     call.on('stream', (remoteStream: MediaStream) => {
+      console.log(`[STREAM] outgoing call stream fired for ${userId}`);
       this.addRemoteStream(video, remoteStream, userId);
     });
     call.on('close', () => {
+      console.warn(`[PEER] outgoing call closed for ${userId}`);
       this.removeParticipant(userId);
     });
     call.on('error', (err: any) => {
       console.error('[PEER] outgoing call error:', err);
     });
 
+    this.attachIceDebug(call, userId, 'outgoing');
     this.peers[userId] = call;
   }
 
@@ -264,6 +270,61 @@ export class ChatComponent implements OnInit, OnDestroy {
       tile.remove();
       this.remoteCount = Math.max(0, this.remoteCount - 1);
     }
+  }
+
+  private attachIceDebug(call: MediaConnection, userId: string, dir: string): void {
+    // Wait a tick for PeerJS to create peerConnection internally
+    setTimeout(() => {
+      const pc: RTCPeerConnection = (call as any).peerConnection;
+      if (!pc) {
+        console.warn(`[ICE][${dir}][${userId}] peerConnection not available`);
+        return;
+      }
+
+      pc.oniceconnectionstatechange = () => {
+        console.log(`[ICE][${dir}][${userId}] iceConnectionState → ${pc.iceConnectionState}`);
+        if (pc.iceConnectionState === 'failed') {
+          console.error(`[ICE][${dir}][${userId}] ICE FAILED — no path could be established. Check TURN server.`);
+        }
+        if (pc.iceConnectionState === 'disconnected') {
+          console.warn(`[ICE][${dir}][${userId}] ICE disconnected — may recover or fail`);
+        }
+      };
+
+      pc.onicegatheringstatechange = () => {
+        console.log(`[ICE][${dir}][${userId}] iceGatheringState → ${pc.iceGatheringState}`);
+      };
+
+      pc.onicecandidate = (event) => {
+        if (!event.candidate) {
+          console.log(`[ICE][${dir}][${userId}] candidate gathering complete`);
+          return;
+        }
+        const c = event.candidate;
+        console.log(`[ICE][${dir}][${userId}] candidate: type=${c.type} protocol=${c.protocol} address=${c.address}`);
+      };
+
+      // Log the selected candidate pair once connected
+      pc.onconnectionstatechange = () => {
+        console.log(`[ICE][${dir}][${userId}] connectionState → ${pc.connectionState}`);
+        if (pc.connectionState === 'connected') {
+          pc.getStats().then((stats) => {
+            stats.forEach((report) => {
+              if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+                const local = (stats as any).get(report.localCandidateId);
+                const remote = (stats as any).get(report.remoteCandidateId);
+                const localType = local?.candidateType ?? '?';
+                const remoteType = remote?.candidateType ?? '?';
+                console.log(
+                  `[ICE][${dir}][${userId}] ✅ SELECTED PAIR — local: ${localType}, remote: ${remoteType}` +
+                  (localType === 'relay' || remoteType === 'relay' ? ' ← TURN relay in use' : ' ← direct/STUN path')
+                );
+              }
+            });
+          });
+        }
+      };
+    }, 0);
   }
 
   private stopLocalStream(): void {
