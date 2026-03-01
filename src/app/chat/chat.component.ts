@@ -52,6 +52,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   // Screen sharing
   isScreenSharing: boolean = false;
   private screenStream: MediaStream | null = null;
+  private audioCtx: AudioContext | null = null;
 
   private myPeer!: Peer;
   private localStream!: MediaStream;
@@ -109,6 +110,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     // Chat messages from others
     this.socket.on('chat-message', (msg: { displayName: string; avatarUrl: string; text: string; timestamp: number }) => {
       this.chatMessages.push({ ...msg, self: false });
+      this.playMessageSound();
       if (!this.chatOpen) {
         this.unreadMessages++;
       }
@@ -119,6 +121,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.socket.on('user-raised-hand', (peerId: string) => {
       this.raisedHands.add(peerId);
       this.showHandIndicator(peerId, true);
+      this.playHandSound();
     });
     this.socket.on('user-lowered-hand', (peerId: string) => {
       this.raisedHands.delete(peerId);
@@ -605,5 +608,48 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => track.stop());
     }
+  }
+
+  private getAudioCtx(): AudioContext {
+    if (!this.audioCtx) {
+      this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return this.audioCtx;
+  }
+
+  private playMessageSound(): void {
+    try {
+      const ctx = this.getAudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(800, ctx.currentTime);
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.18);
+    } catch (_) {}
+  }
+
+  private playHandSound(): void {
+    try {
+      const ctx = this.getAudioCtx();
+      const playTone = (freq: number, start: number, duration: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.25, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+        osc.start(start);
+        osc.stop(start + duration);
+      };
+      playTone(600, ctx.currentTime, 0.12);
+      playTone(900, ctx.currentTime + 0.14, 0.18);
+    } catch (_) {}
   }
 }
