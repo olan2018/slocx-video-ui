@@ -78,19 +78,20 @@ export class ChatComponent implements OnInit, OnDestroy {
       config: {
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:slocx.metered.ca:80' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:slocx.metered.live:80' },
           {
-            urls: 'turn:slocx.metered.ca:80',
+            urls: 'turn:slocx.metered.live:80',
             username: '6cd2bd6552c9c01f4bb75822',
             credential: 'NnRurMddTHIbVDV9',
           },
           {
-            urls: 'turn:slocx.metered.ca:443',
+            urls: 'turn:slocx.metered.live:443',
             username: '6cd2bd6552c9c01f4bb75822',
             credential: 'NnRurMddTHIbVDV9',
           },
           {
-            urls: 'turns:slocx.metered.ca:443?transport=tcp',
+            urls: 'turns:slocx.metered.live:443?transport=tcp',
             username: '6cd2bd6552c9c01f4bb75822',
             credential: 'NnRurMddTHIbVDV9',
           },
@@ -253,15 +254,29 @@ export class ChatComponent implements OnInit, OnDestroy {
     grid.append(tile);
     this.remoteCount++;
 
-    // Set stream after element is in DOM, then play immediately
+    // Set stream after element is in DOM, then play
     video.setAttribute('playsinline', '');
     video.autoplay = true;
+    video.muted = true; // Start muted — required for autoplay on mobile
     video.srcObject = stream;
-    video.play().catch(() => {
-      // Autoplay blocked — try muted fallback (browser policy)
-      video.muted = true;
-      video.play().catch(console.error);
-    });
+    video.play()
+      .then(() => {
+        // Unmute immediately — works on desktop; silently stays muted on mobile
+        video.muted = false;
+        if (video.muted) {
+          // Still muted (mobile autoplay policy) — show tap-to-unmute on tile
+          tile.setAttribute('data-muted', '1');
+          tile.title = 'Tap to enable audio';
+          tile.style.cursor = 'pointer';
+          tile.addEventListener('click', () => {
+            video.muted = false;
+            tile.removeAttribute('data-muted');
+            tile.title = '';
+            tile.style.cursor = '';
+          }, { once: true });
+        }
+      })
+      .catch(console.error);
   }
 
   private removeParticipant(userId: string): void {
