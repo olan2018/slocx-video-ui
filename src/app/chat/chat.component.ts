@@ -189,14 +189,7 @@ export class ChatComponent implements OnInit, OnDestroy {
         });
 
         navigator.mediaDevices
-          .getUserMedia({
-            video: true,
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-          })
+          .getUserMedia({ video: true, audio: true })
           .then((stream) => {
             this.localStream = stream;
 
