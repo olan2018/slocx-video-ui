@@ -46,6 +46,15 @@ export class ChatComponent implements OnInit, OnDestroy {
   handRaised: boolean = false;
   raisedHands: Set<string> = new Set();
 
+  // Emoji reactions
+  reactionsOpen: boolean = false;
+  floatingReactions: { emoji: string; name: string; id: number }[] = [];
+  private reactionIdCounter: number = 0;
+  readonly reactionEmojis: string[] = [
+    '👍', '👏', '😂', '❤️', '🔥', '🎉', '😮', '😢',
+    '🤔', '💯', '🙌', '👀', '💪', '⭐', '🥳', '😍',
+  ];
+
   // Audio prompt (browser autoplay policy blocks unmuted playback)
   showAudioPrompt: boolean = false;
 
@@ -127,6 +136,11 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.socket.on('user-lowered-hand', (peerId: string) => {
       this.raisedHands.delete(peerId);
       this.showHandIndicator(peerId, false);
+    });
+
+    // Emoji reactions from others
+    this.socket.on('user-reaction', (data: { displayName: string; emoji: string }) => {
+      this.showFloatingReaction(data.emoji, data.displayName);
     });
 
     // Screen share state from remote peers — toggle CSS mirror flip on their tile
@@ -283,6 +297,24 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.socket.emit(this.handRaised ? 'raise-hand' : 'lower-hand');
   }
 
+  toggleReactions(): void {
+    this.reactionsOpen = !this.reactionsOpen;
+  }
+
+  sendReaction(emoji: string): void {
+    this.socket.emit('reaction', { emoji });
+    this.showFloatingReaction(emoji, this.myDisplayName);
+    this.reactionsOpen = false;
+  }
+
+  private showFloatingReaction(emoji: string, name: string): void {
+    const id = this.reactionIdCounter++;
+    this.floatingReactions.push({ emoji, name, id });
+    setTimeout(() => {
+      this.floatingReactions = this.floatingReactions.filter((r) => r.id !== id);
+    }, 3500);
+  }
+
   toggleChat(): void {
     this.chatOpen = !this.chatOpen;
     if (this.chatOpen) {
@@ -329,10 +361,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
       this.replaceVideoTrackInPeers(screenTrack);
 
-      if (this.localVideoEl?.nativeElement) {
-        this.localVideoEl.nativeElement.srcObject = screenStream;
-      }
-
+      // Keep webcam in PiP — don't replace it. Show screen preview separately.
       this.isScreenSharing = true;
       this.socket.emit('start-screen-share');
 
@@ -356,10 +385,6 @@ export class ChatComponent implements OnInit, OnDestroy {
     const cameraTrack = this.localStream?.getVideoTracks()[0];
     if (cameraTrack) {
       this.replaceVideoTrackInPeers(cameraTrack);
-    }
-
-    if (this.localVideoEl?.nativeElement) {
-      this.localVideoEl.nativeElement.srcObject = this.localStream;
     }
 
     this.isScreenSharing = false;
