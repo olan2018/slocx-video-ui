@@ -609,3 +609,117 @@
     border-left: none;
   }
 }
+
+/* ── Reactions picker ───────────────────────────────────── */
+.meet-ctrl-reactions-wrap {
+  position: relative;
+}
+
+.reactions-picker {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2d2e30;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  z-index: 50;
+  animation: pickerSlideUp 0.2s ease;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+@keyframes pickerSlideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.reaction-pick {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, transform 0.12s;
+  padding: 0;
+}
+.reaction-pick:hover {
+  background: rgba(255,255,255,0.12);
+  transform: scale(1.25);
+}
+
+@media (max-width: 600px) {
+  .reactions-picker {
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
+    padding: 8px;
+    bottom: 56px;
+  }
+  .reaction-pick {
+    width: 34px;
+    height: 34px;
+    font-size: 18px;
+  }
+}
+
+/* ── Floating reactions ─────────────────────────────────── */
+.reactions-float {
+  position: absolute;
+  bottom: 100px;
+  left: 24px;
+  z-index: 25;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.reaction-bubble {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(6px);
+  border-radius: 24px;
+  padding: 6px 14px 6px 8px;
+  animation: reactionFloat 3.5s ease-out forwards;
+  white-space: nowrap;
+}
+
+.reaction-emoji {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.reaction-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e8eaed;
+}
+
+@keyframes reactionFloat {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(-20px) scale(1.1);
+  }
+  80% {
+    opacity: 1;
+    transform: translateY(-60px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-90px) scale(0.8);
+  }
+}
