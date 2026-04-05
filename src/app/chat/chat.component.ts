@@ -58,6 +58,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   private localStream!: MediaStream;
   private peers: { [key: string]: MediaConnection } = {};
   private remoteVideos: HTMLVideoElement[] = [];
+  private remoteAudios: Map<string, HTMLAudioElement> = new Map();
   private timeInterval!: any;
   private socket!: ReturnType<typeof io>;
   private myUsername: string = '';
@@ -247,6 +248,11 @@ export class ChatComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     clearInterval(this.timeInterval);
     this.stopLocalStream();
+    this.remoteAudios.forEach((audio) => {
+      audio.pause();
+      audio.srcObject = null;
+    });
+    this.remoteAudios.clear();
     if (this.myPeer) {
       this.myPeer.destroy();
     }
@@ -375,9 +381,9 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   enableAudio(): void {
     // Called from a real user click — satisfies browser autoplay gesture requirement
-    this.remoteVideos.forEach((v) => {
-      v.muted = false;
-      if (v.paused) v.play().catch(() => {});
+    this.remoteAudios.forEach((audio) => {
+      audio.muted = false;
+      if (audio.paused) audio.play().catch(() => {});
     });
     this.showAudioPrompt = false;
   }
@@ -439,22 +445,33 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     const existingTile = document.getElementById('tile-' + userId);
     if (existingTile) {
-      // ICE renegotiation — swap srcObject on the EXISTING video element in the DOM
+      // ICE renegotiation — swap streams on existing elements
       const existingVideo = existingTile.querySelector('video') as HTMLVideoElement | null;
       if (existingVideo) {
-        console.log(`[STREAM] renegotiation for ${userId}, swapping srcObject on DOM video`);
-        existingVideo.srcObject = stream;
-        existingVideo.muted = false;
+        console.log(`[STREAM] renegotiation for ${userId}, swapping srcObject`);
+        // Video-only stream for the video element
+        const videoOnly = new MediaStream(stream.getVideoTracks());
+        existingVideo.srcObject = videoOnly;
         existingVideo.play().catch((err) => {
-          if (err.name !== 'AbortError') {
-            console.error(`[STREAM] renegotiation play() error for ${userId}:`, err);
-          }
+          if (err.name !== 'AbortError') console.error(`[STREAM] renego play error:`, err);
         });
+      }
+      // Update the separate audio element
+      const existingAudio = this.remoteAudios.get(userId);
+      if (existingAudio && stream.getAudioTracks().length > 0) {
+        existingAudio.srcObject = new MediaStream(stream.getAudioTracks());
+        existingAudio.play().catch(() => {});
       }
       return;
     }
 
-    // Build and attach tile to DOM first so the video element is live
+    // ── Build video tile (video only, always muted) ──
+    const videoOnly = new MediaStream(stream.getVideoTracks());
+    video.setAttribute('playsinline', '');
+    video.autoplay = true;
+    video.muted = true; // Video element is always muted — audio goes through separate <audio>
+    video.srcObject = videoOnly;
+
     const tile = document.createElement('div');
     tile.classList.add('meet-video-tile');
     tile.id = 'tile-' + userId;
@@ -465,44 +482,36 @@ export class ChatComponent implements OnInit, OnDestroy {
     grid.append(tile);
     this.remoteCount++;
 
-    // Show raised hand badge if already raised before tile appeared
     if (this.raisedHands.has(userId)) {
       this.showHandIndicator(userId, true);
     }
 
-    // Track this video element so enableAudio() can unmute it on user click
     this.remoteVideos.push(video);
-
-    // Set stream after element is in DOM, then play
-    video.setAttribute('playsinline', '');
-    video.autoplay = true;
-    video.srcObject = stream;
 
     video.addEventListener('loadedmetadata', () => {
       console.log(`[VIDEO] loadedmetadata for ${userId}: ${video.videoWidth}x${video.videoHeight}`);
     });
+    video.play().catch(() => {});
 
-    // Try unmuted play first (works if user already interacted with the page)
-    video.muted = false;
-    video.play()
-      .then(() => {
-        console.log(`[AUDIO] ✅ playing unmuted for ${userId}`);
-      })
-      .catch((err) => {
-        if (err.name === 'AbortError') return;
-        // Autoplay policy blocked unmuted — fall back to muted, then prompt user
-        console.warn(`[AUDIO] unmuted play blocked for ${userId}, falling back to muted`);
-        video.muted = true;
-        video.play()
-          .then(() => {
-            this.showAudioPrompt = true;
-          })
-          .catch((e) => {
-            if (e.name !== 'AbortError') {
-              console.error(`[STREAM] muted play() also failed for ${userId}:`, e);
-            }
-          });
-      });
+    // ── Separate <audio> element for remote audio ──
+    // This prevents the browser's AEC from suppressing the local mic
+    if (stream.getAudioTracks().length > 0) {
+      const audio = new Audio();
+      audio.srcObject = new MediaStream(stream.getAudioTracks());
+      audio.autoplay = true;
+      audio.muted = false;
+      this.remoteAudios.set(userId, audio);
+
+      audio.play()
+        .then(() => {
+          console.log(`[AUDIO] ✅ separate audio playing for ${userId}`);
+        })
+        .catch((err) => {
+          if (err.name === 'AbortError') return;
+          console.warn(`[AUDIO] autoplay blocked for ${userId}, showing prompt`);
+          this.showAudioPrompt = true;
+        });
+    }
   }
 
   private removeParticipant(userId: string): void {
@@ -515,7 +524,13 @@ export class ChatComponent implements OnInit, OnDestroy {
       tile.remove();
       this.remoteCount = Math.max(0, this.remoteCount - 1);
     }
-    // Hide audio prompt if no more remote participants
+    // Clean up separate audio element
+    const audio = this.remoteAudios.get(userId);
+    if (audio) {
+      audio.pause();
+      audio.srcObject = null;
+      this.remoteAudios.delete(userId);
+    }
     if (this.remoteCount === 0) {
       this.showAudioPrompt = false;
     }
