@@ -64,6 +64,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   private audioCtx: AudioContext | null = null;
 
   private myPeer!: Peer;
+  private myPeerId: string = '';
   private localStream!: MediaStream;
   private peers: { [key: string]: MediaConnection } = {};
   private remoteVideos: HTMLVideoElement[] = [];
@@ -190,6 +191,8 @@ export class ChatComponent implements OnInit, OnDestroy {
         });
 
         this.myPeer.on('open', (userPeerId: string) => {
+          console.log(`[PEER] open with id: ${userPeerId}`);
+          this.myPeerId = userPeerId;
           this.socket.emit('joinRoom', {
             userPeerId,
             username,
@@ -199,8 +202,34 @@ export class ChatComponent implements OnInit, OnDestroy {
           });
         });
 
+        // PeerJS disconnected from signaling server — reconnect
+        this.myPeer.on('disconnected', () => {
+          console.warn('[PEER] disconnected from signaling server — reconnecting...');
+          if (!this.myPeer.destroyed) {
+            this.myPeer.reconnect();
+          }
+        });
+
         this.myPeer.on('error', (err: any) => {
           console.error('[PEER] error:', err);
+          // If the peer was destroyed, recreate it
+          if (err.type === 'server-error' || err.type === 'socket-error') {
+            console.warn('[PEER] server/socket error — will reconnect on next attempt');
+          }
+        });
+
+        // Socket.io reconnect — re-join the room so new users can see us
+        this.socket.on('connect', () => {
+          if (this.myPeerId) {
+            console.log('[SOCKET] reconnected — re-joining room');
+            this.socket.emit('joinRoom', {
+              userPeerId: this.myPeerId,
+              username,
+              room,
+              displayName: this.myDisplayName,
+              avatarUrl: this.myAvatarUrl,
+            });
+          }
         });
 
         navigator.mediaDevices
