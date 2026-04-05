@@ -189,13 +189,22 @@ export class ChatComponent implements OnInit, OnDestroy {
         });
 
         navigator.mediaDevices
-          .getUserMedia({ video: true, audio: true })
+          .getUserMedia({
+            video: true,
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
+          })
           .then((stream) => {
             this.localStream = stream;
 
             setTimeout(() => {
               if (this.localVideoEl?.nativeElement) {
                 this.localVideoEl.nativeElement.srcObject = stream;
+                this.localVideoEl.nativeElement.muted = true; // Must stay muted to prevent self-echo
+                this.localVideoEl.nativeElement.volume = 0;
                 this.localVideoEl.nativeElement.play().catch(() => {});
               }
             }, 0);
@@ -421,18 +430,27 @@ export class ChatComponent implements OnInit, OnDestroy {
     vTracks.forEach((t) =>
       console.log(`  [TRACK] video: enabled=${t.enabled}, readyState=${t.readyState}, muted=${t.muted}`)
     );
+    aTracks.forEach((t) =>
+      console.log(`  [TRACK] audio: enabled=${t.enabled}, readyState=${t.readyState}, muted=${t.muted}`)
+    );
+    if (aTracks.length === 0) {
+      console.warn(`[AUDIO] ⚠️ NO audio tracks in remote stream for ${userId}!`);
+    }
 
     const existingTile = document.getElementById('tile-' + userId);
     if (existingTile) {
-      // ICE renegotiation — swap srcObject without pausing (avoids AbortError)
-      console.log(`[STREAM] renegotiation for ${userId}, swapping srcObject`);
-      video.srcObject = stream;
-      video.muted = false;
-      video.play().catch((err) => {
-        if (err.name !== 'AbortError') {
-          console.error(`[STREAM] renegotiation play() error for ${userId}:`, err);
-        }
-      });
+      // ICE renegotiation — swap srcObject on the EXISTING video element in the DOM
+      const existingVideo = existingTile.querySelector('video') as HTMLVideoElement | null;
+      if (existingVideo) {
+        console.log(`[STREAM] renegotiation for ${userId}, swapping srcObject on DOM video`);
+        existingVideo.srcObject = stream;
+        existingVideo.muted = false;
+        existingVideo.play().catch((err) => {
+          if (err.name !== 'AbortError') {
+            console.error(`[STREAM] renegotiation play() error for ${userId}:`, err);
+          }
+        });
+      }
       return;
     }
 
@@ -458,31 +476,32 @@ export class ChatComponent implements OnInit, OnDestroy {
     // Set stream after element is in DOM, then play
     video.setAttribute('playsinline', '');
     video.autoplay = true;
-    video.muted = true; // Start muted — required for autoplay on mobile
     video.srcObject = stream;
 
     video.addEventListener('loadedmetadata', () => {
       console.log(`[VIDEO] loadedmetadata for ${userId}: ${video.videoWidth}x${video.videoHeight}`);
     });
 
+    // Try unmuted play first (works if user already interacted with the page)
+    video.muted = false;
     video.play()
       .then(() => {
-        // Try to unmute — works on desktop Chrome; may silently stay muted on mobile
-        video.muted = false;
-        console.log(`[AUDIO] after unmute attempt: video.muted=${video.muted}`);
-        // After a short delay, verify muted status (browser may keep it muted)
-        setTimeout(() => {
-          if (video.muted) {
-            console.warn(`[AUDIO] video still muted for ${userId} — showing audio prompt`);
-            this.showAudioPrompt = true;
-          }
-        }, 300);
+        console.log(`[AUDIO] ✅ playing unmuted for ${userId}`);
       })
       .catch((err) => {
-        // AbortError is expected when renegotiation swaps srcObject before play() resolves
-        if (err.name !== 'AbortError') {
-          console.error(`[STREAM] play() error for ${userId}:`, err);
-        }
+        if (err.name === 'AbortError') return;
+        // Autoplay policy blocked unmuted — fall back to muted, then prompt user
+        console.warn(`[AUDIO] unmuted play blocked for ${userId}, falling back to muted`);
+        video.muted = true;
+        video.play()
+          .then(() => {
+            this.showAudioPrompt = true;
+          })
+          .catch((e) => {
+            if (e.name !== 'AbortError') {
+              console.error(`[STREAM] muted play() also failed for ${userId}:`, e);
+            }
+          });
       });
   }
 
