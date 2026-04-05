@@ -132,9 +132,15 @@
   transform: scaleX(-1);
   display: block;
 }
-/* Remove mirror flip when remote peer is screen sharing */
+/* Screen sharing: show full screen without cropping, no mirror flip */
+:host ::ng-deep .meet-video-tile.screen-sharing {
+  max-width: 100%;
+  aspect-ratio: auto;
+}
 :host ::ng-deep .meet-video-tile.screen-sharing video {
   transform: none;
+  object-fit: contain;
+  background: #000;
 }
 
 /* ── Raise hand badge on remote tiles ────────────────────── */
@@ -179,9 +185,11 @@
   transform: scaleX(-1);
   display: block;
 }
-/* Remove mirror flip on local PiP when screen sharing */
+/* Screen sharing on local PiP: show full screen, no mirror */
 .meet-pip.screen-sharing video {
   transform: none;
+  object-fit: contain;
+  background: #000;
 }
 .meet-pip-overlay {
   position: absolute;
