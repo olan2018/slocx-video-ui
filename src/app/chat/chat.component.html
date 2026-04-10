@@ -1,17 +1,55 @@
-<div class="meet-root">
-  <!-- Top bar -->
+<div class="meet-root" [attr.data-theme]="isDarkMode ? 'dark' : 'light'">
+
+  <!-- ══ Top bar ══════════════════════════════════════════════ -->
   <div class="meet-topbar">
     <div class="meet-topbar-left">
-      <img src="../../assets/slocx.png" class="meet-logo" alt="Slocx" />
-      <span class="meet-brand">Slocx Classroom</span>
+      <!-- Logo -->
+      <div class="meet-logo-wrap">
+        <img src="../../assets/slocx.png" class="meet-logo" alt="Slocx" />
+      </div>
+      <div class="meet-brand-stack">
+        <span class="meet-brand-name">Slocx</span>
+        <span class="meet-brand-sub">Classroom</span>
+      </div>
+      <div class="meet-topbar-divider"></div>
     </div>
+
     <div class="meet-topbar-right">
+
+      <!-- Lesson timer (visible even before start, dimmed when waiting) -->
+      <div class="lesson-timer" [class.lesson-timer--waiting]="!timerStarted" [class.lesson-timer--urgent]="timerUrgent">
+        <svg class="timer-ring" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+          <!-- Background track -->
+          <circle class="timer-ring__track"
+            cx="22" cy="22" [attr.r]="TIMER_RADIUS"
+            fill="none" stroke-width="3" />
+          <!-- Progress arc (rotated so it starts at 12 o'clock) -->
+          <circle class="timer-ring__fill"
+            cx="22" cy="22" [attr.r]="TIMER_RADIUS"
+            fill="none" stroke-width="3"
+            [attr.stroke-dasharray]="TIMER_CIRCUMFERENCE"
+            [style.stroke-dashoffset]="timerDashOffset"
+            stroke-linecap="round" />
+        </svg>
+        <div class="timer-text-wrap">
+          <span class="timer-label">{{ timerStarted ? timerLabel : '--:--' }}</span>
+          <span class="timer-caption">{{ timerStarted ? 'remaining' : 'waiting' }}</span>
+        </div>
+      </div>
+
+      <!-- Current time -->
       <span class="meet-clock">{{ currentTime | date:'HH:mm' }}</span>
+
+      <!-- Theme toggle -->
+      <button class="theme-toggle" (click)="toggleTheme()" [title]="isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'">
+        <i class="bi" [class.bi-moon-stars-fill]="isDarkMode" [class.bi-brightness-high-fill]="!isDarkMode"></i>
+      </button>
     </div>
   </div>
 
-  <!-- Main area -->
+  <!-- ══ Main area ════════════════════════════════════════════ -->
   <div class="meet-main">
+
     <!-- Permission denied -->
     <div class="meet-state" *ngIf="permissionError">
       <div class="meet-state-icon meet-state-icon--error">
@@ -36,7 +74,7 @@
         <i class="bi bi-person-circle"></i>
       </div>
       <p class="meet-state-title">You're the only one here</p>
-      <p class="meet-state-sub">Waiting for others to join the lesson...</p>
+      <p class="meet-state-sub">Waiting for others to join — the timer will start once your lesson partner arrives.</p>
     </div>
 
     <!-- Remote video grid -->
@@ -50,10 +88,7 @@
 
     <!-- Floating reactions -->
     <div class="reactions-float">
-      <div
-        class="reaction-bubble"
-        *ngFor="let r of floatingReactions"
-      >
+      <div class="reaction-bubble" *ngFor="let r of floatingReactions">
         <span class="reaction-emoji">{{ r.emoji }}</span>
         <span class="reaction-name">{{ r.name }}</span>
       </div>
@@ -73,80 +108,51 @@
     </div>
   </div>
 
-  <!-- Bottom control bar -->
+  <!-- ══ Bottom control bar ═══════════════════════════════════ -->
   <div class="meet-controls">
     <div class="meet-controls-inner">
+
       <!-- Mic -->
-      <button
-        class="meet-ctrl-btn"
-        [class.meet-ctrl-off]="isMuted"
-        (click)="toggleMic()"
-        [title]="isMuted ? 'Unmute microphone' : 'Mute microphone'"
-      >
+      <button class="meet-ctrl-btn" [class.meet-ctrl-off]="isMuted" (click)="toggleMic()"
+        [title]="isMuted ? 'Unmute microphone' : 'Mute microphone'">
         <i class="bi" [class.bi-mic-fill]="!isMuted" [class.bi-mic-mute-fill]="isMuted"></i>
         <span class="meet-ctrl-label">{{ isMuted ? 'Unmute' : 'Mute' }}</span>
       </button>
 
       <!-- Camera -->
-      <button
-        class="meet-ctrl-btn"
-        [class.meet-ctrl-off]="!isCameraOn"
-        (click)="toggleCamera()"
-        [title]="isCameraOn ? 'Turn off camera' : 'Turn on camera'"
-      >
+      <button class="meet-ctrl-btn" [class.meet-ctrl-off]="!isCameraOn" (click)="toggleCamera()"
+        [title]="isCameraOn ? 'Turn off camera' : 'Turn on camera'">
         <i class="bi" [class.bi-camera-video-fill]="isCameraOn" [class.bi-camera-video-off-fill]="!isCameraOn"></i>
         <span class="meet-ctrl-label">{{ isCameraOn ? 'Stop video' : 'Start video' }}</span>
       </button>
 
       <!-- Screen share -->
-      <button
-        class="meet-ctrl-btn"
-        [class.meet-ctrl-active]="isScreenSharing"
-        (click)="toggleScreenShare()"
-        [title]="isScreenSharing ? 'Stop sharing' : 'Share screen'"
-      >
+      <button class="meet-ctrl-btn" [class.meet-ctrl-active]="isScreenSharing" (click)="toggleScreenShare()"
+        [title]="isScreenSharing ? 'Stop sharing' : 'Share screen'">
         <i class="bi bi-display"></i>
         <span class="meet-ctrl-label">{{ isScreenSharing ? 'Stop share' : 'Share' }}</span>
       </button>
 
       <!-- Raise hand -->
-      <button
-        class="meet-ctrl-btn"
-        [class.meet-ctrl-hand]="handRaised"
-        (click)="toggleHand()"
-        [title]="handRaised ? 'Lower hand' : 'Raise hand'"
-      >
+      <button class="meet-ctrl-btn" [class.meet-ctrl-hand]="handRaised" (click)="toggleHand()"
+        [title]="handRaised ? 'Lower hand' : 'Raise hand'">
         <i class="bi bi-hand-index-thumb-fill"></i>
         <span class="meet-ctrl-label">{{ handRaised ? 'Lower' : 'Hand' }}</span>
       </button>
 
       <!-- Reactions -->
       <div class="meet-ctrl-reactions-wrap">
-        <button
-          class="meet-ctrl-btn"
-          [class.meet-ctrl-active]="reactionsOpen"
-          (click)="toggleReactions()"
-          title="Reactions"
-        >
+        <button class="meet-ctrl-btn" [class.meet-ctrl-active]="reactionsOpen" (click)="toggleReactions()" title="Reactions">
           <i class="bi bi-emoji-smile"></i>
           <span class="meet-ctrl-label">React</span>
         </button>
         <div class="reactions-picker" *ngIf="reactionsOpen">
-          <button
-            class="reaction-pick"
-            *ngFor="let emoji of reactionEmojis"
-            (click)="sendReaction(emoji)"
-          >{{ emoji }}</button>
+          <button class="reaction-pick" *ngFor="let emoji of reactionEmojis" (click)="sendReaction(emoji)">{{ emoji }}</button>
         </div>
       </div>
 
       <!-- Chat -->
-      <button
-        class="meet-ctrl-btn meet-ctrl-chat-btn"
-        [class.meet-ctrl-active]="chatOpen"
-        (click)="toggleChat()"
-        title="Chat"
-      >
+      <button class="meet-ctrl-btn meet-ctrl-chat-btn" [class.meet-ctrl-active]="chatOpen" (click)="toggleChat()" title="Chat">
         <span class="chat-btn-inner">
           <i class="bi bi-chat-fill"></i>
           <span class="chat-unread-badge" *ngIf="unreadMessages > 0">{{ unreadMessages > 9 ? '9+' : unreadMessages }}</span>
@@ -162,7 +168,7 @@
     </div>
   </div>
 
-  <!-- Chat panel (slides in from right) -->
+  <!-- ══ Chat panel ════════════════════════════════════════════ -->
   <div class="chat-panel" [class.chat-panel--open]="chatOpen">
     <div class="chat-header">
       <span class="chat-header-title">In-call messages</span>
@@ -176,13 +182,8 @@
         <i class="bi bi-chat-dots"></i>
         <p>No messages yet</p>
       </div>
-      <div
-        *ngFor="let msg of chatMessages"
-        class="chat-msg"
-        [class.chat-msg--self]="msg.self"
-      >
+      <div *ngFor="let msg of chatMessages" class="chat-msg" [class.chat-msg--self]="msg.self">
         <div class="chat-msg-row">
-          <!-- Avatar for others (left side) -->
           <div class="chat-avatar" *ngIf="!msg.self">
             <img *ngIf="msg.avatarUrl" [src]="msg.avatarUrl" [alt]="msg.displayName" class="chat-avatar-img" />
             <span *ngIf="!msg.avatarUrl" class="chat-avatar-initials">{{ msg.displayName ? msg.displayName[0].toUpperCase() : '?' }}</span>
@@ -199,17 +200,12 @@
     </div>
 
     <div class="chat-input-row">
-      <input
-        class="chat-input"
-        [(ngModel)]="chatInput"
-        (keydown)="onChatKeyDown($event)"
-        placeholder="Send a message..."
-        maxlength="500"
-        autocomplete="off"
-      />
+      <input class="chat-input" [(ngModel)]="chatInput" (keydown)="onChatKeyDown($event)"
+        placeholder="Send a message..." maxlength="500" autocomplete="off" />
       <button class="chat-send-btn" (click)="sendMessage()" [disabled]="!chatInput.trim()">
         <i class="bi bi-send-fill"></i>
       </button>
     </div>
   </div>
+
 </div>

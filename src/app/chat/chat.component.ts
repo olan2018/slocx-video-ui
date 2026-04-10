@@ -36,6 +36,9 @@ export class ChatComponent implements OnInit, OnDestroy {
   remoteCount: number = 0;
   currentTime: Date = new Date();
 
+  // Theme
+  isDarkMode: boolean = true;
+
   // Chat
   chatOpen: boolean = false;
   chatMessages: ChatMessage[] = [];
@@ -55,7 +58,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     '🤔', '💯', '🙌', '👀', '💪', '⭐', '🥳', '😍',
   ];
 
-  // Audio prompt (browser autoplay policy blocks unmuted playback)
+  // Audio prompt
   showAudioPrompt: boolean = false;
 
   // Screen sharing
@@ -63,13 +66,48 @@ export class ChatComponent implements OnInit, OnDestroy {
   private screenStream: MediaStream | null = null;
   private audioCtx: AudioContext | null = null;
 
+  // ── Lesson timer ──────────────────────────────────────────
+  /** Total lesson duration in seconds (from URL ?duration=N minutes, default 60 min) */
+  lessonDurationSecs: number = 3600;
+  /** Remaining seconds */
+  timerRemainingSecs: number = 3600;
+  /** True once the second participant joined and countdown began */
+  timerStarted: boolean = false;
+
+  readonly TIMER_RADIUS = 18;
+  readonly TIMER_CIRCUMFERENCE = 2 * Math.PI * 18; // ≈ 113.1
+
+  get timerProgress(): number {
+    if (this.lessonDurationSecs === 0) return 1;
+    return this.timerRemainingSecs / this.lessonDurationSecs;
+  }
+
+  get timerDashOffset(): number {
+    return this.TIMER_CIRCUMFERENCE * (1 - this.timerProgress);
+  }
+
+  /** MM:SS label shown inside / next to the ring */
+  get timerLabel(): string {
+    const secs = Math.max(0, this.timerRemainingSecs);
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  /** Ring turns red when ≤ 5 minutes remain */
+  get timerUrgent(): boolean {
+    return this.timerStarted && this.timerRemainingSecs <= 300;
+  }
+  // ─────────────────────────────────────────────────────────
+
   private myPeer!: Peer;
   private myPeerId: string = '';
   private localStream!: MediaStream;
   private peers: { [key: string]: MediaConnection } = {};
   private remoteVideos: HTMLVideoElement[] = [];
   private remoteAudios: Map<string, HTMLAudioElement> = new Map();
-  private timeInterval!: any;
+  private clockInterval!: any;
+  private timerInterval!: any;
   private socket!: ReturnType<typeof io>;
   private myUsername: string = '';
   myDisplayName: string = 'Me';
@@ -79,17 +117,32 @@ export class ChatComponent implements OnInit, OnDestroy {
   constructor() {}
 
   ngOnInit(): void {
-    this.timeInterval = setInterval(() => {
+    // Load saved theme
+    const savedTheme = localStorage.getItem('slocx-theme');
+    this.isDarkMode = savedTheme !== 'light';
+
+    // Clock tick
+    this.clockInterval = setInterval(() => {
       this.currentTime = new Date();
     }, 1000);
 
-    const { user: username, room, name, photo } = Qs.parse(location.search, {
-      ignoreQueryPrefix: true,
-    });
+    const parsed = Qs.parse(location.search, { ignoreQueryPrefix: true });
+    const username = parsed['user'] as string;
+    const room = parsed['room'] as string;
+    const name = parsed['name'] as string;
+    const photo = parsed['photo'] as string;
+    const durationParam = parsed['duration'] as string;
 
-    this.myUsername = (username as string) || 'Me';
-    this.myDisplayName = (name as string) || this.myUsername;
-    this.myAvatarUrl = (photo as string) || '';
+    // Parse lesson duration
+    const durationMins = parseInt(durationParam, 10);
+    if (!isNaN(durationMins) && durationMins > 0) {
+      this.lessonDurationSecs = durationMins * 60;
+    }
+    this.timerRemainingSecs = this.lessonDurationSecs;
+
+    this.myUsername = username || 'Me';
+    this.myDisplayName = name || this.myUsername;
+    this.myAvatarUrl = photo || '';
 
     this.socket = io(environment.socketUrl);
 
@@ -118,7 +171,6 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.connectionErrorMsg = 'You are already connected to this lesson from another window.';
     });
 
-    // Chat messages from others
     this.socket.on('chat-message', (msg: { displayName: string; avatarUrl: string; text: string; timestamp: number }) => {
       this.chatMessages.push({ ...msg, self: false });
       this.playMessageSound();
@@ -128,7 +180,6 @@ export class ChatComponent implements OnInit, OnDestroy {
       setTimeout(() => this.scrollChatToBottom(), 0);
     });
 
-    // Raise hand events
     this.socket.on('user-raised-hand', (peerId: string) => {
       this.raisedHands.add(peerId);
       this.showHandIndicator(peerId, true);
@@ -139,12 +190,10 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.showHandIndicator(peerId, false);
     });
 
-    // Emoji reactions from others
     this.socket.on('user-reaction', (data: { displayName: string; emoji: string }) => {
       this.showFloatingReaction(data.emoji, data.displayName);
     });
 
-    // Screen share state from remote peers — toggle CSS mirror flip on their tile
     this.socket.on('user-started-screen-share', (peerId: string) => {
       document.getElementById('tile-' + peerId)?.classList.add('screen-sharing');
     });
@@ -152,7 +201,6 @@ export class ChatComponent implements OnInit, OnDestroy {
       document.getElementById('tile-' + peerId)?.classList.remove('screen-sharing');
     });
 
-    // Remote user left — handled separately so we can clean up raised hands too
     this.socket.on('user-disconnected', (userId: string) => {
       this.raisedHands.delete(userId);
       this.peerProfiles.delete(userId);
@@ -163,7 +211,6 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.removeParticipant(userId);
     });
 
-    // Fetch fresh Cloudflare TURN credentials from backend, fall back to env values
     fetch(`${environment.apiUrl}/v1/turn/credentials`)
       .then((res) => (res.ok ? res.json() : null))
       .catch(() => null)
@@ -202,7 +249,6 @@ export class ChatComponent implements OnInit, OnDestroy {
           });
         });
 
-        // PeerJS disconnected from signaling server — reconnect
         this.myPeer.on('disconnected', () => {
           console.warn('[PEER] disconnected from signaling server — reconnecting...');
           if (!this.myPeer.destroyed) {
@@ -212,13 +258,8 @@ export class ChatComponent implements OnInit, OnDestroy {
 
         this.myPeer.on('error', (err: any) => {
           console.error('[PEER] error:', err);
-          // If the peer was destroyed, recreate it
-          if (err.type === 'server-error' || err.type === 'socket-error') {
-            console.warn('[PEER] server/socket error — will reconnect on next attempt');
-          }
         });
 
-        // Socket.io reconnect — re-join the room so new users can see us
         this.socket.on('connect', () => {
           if (this.myPeerId) {
             console.log('[SOCKET] reconnected — re-joining room');
@@ -247,13 +288,12 @@ export class ChatComponent implements OnInit, OnDestroy {
             setTimeout(() => {
               if (this.localVideoEl?.nativeElement) {
                 this.localVideoEl.nativeElement.srcObject = stream;
-                this.localVideoEl.nativeElement.muted = true; // Must stay muted to prevent self-echo
+                this.localVideoEl.nativeElement.muted = true;
                 this.localVideoEl.nativeElement.volume = 0;
                 this.localVideoEl.nativeElement.play().catch(() => {});
               }
             }, 0);
 
-            // Answer incoming PeerJS calls
             this.myPeer.on('call', (call: MediaConnection) => {
               call.answer(stream);
               const video = document.createElement('video');
@@ -273,7 +313,6 @@ export class ChatComponent implements OnInit, OnDestroy {
               this.attachIceDebug(call, call.peer, 'incoming', video);
             });
 
-            // New user joined — call them
             this.socket.on('user-connected', (data: { peerId: string; displayName: string; avatarUrl: string }) => {
               this.peerProfiles.set(data.peerId, { name: data.displayName, avatar: data.avatarUrl });
               setTimeout(() => {
@@ -289,7 +328,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    clearInterval(this.timeInterval);
+    clearInterval(this.clockInterval);
+    clearInterval(this.timerInterval);
     this.stopLocalStream();
     this.remoteAudios.forEach((audio) => {
       audio.pause();
@@ -299,6 +339,27 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (this.myPeer) {
       this.myPeer.destroy();
     }
+  }
+
+  // ── Theme ─────────────────────────────────────────────────
+
+  toggleTheme(): void {
+    this.isDarkMode = !this.isDarkMode;
+    localStorage.setItem('slocx-theme', this.isDarkMode ? 'dark' : 'light');
+  }
+
+  // ── Timer ─────────────────────────────────────────────────
+
+  private startLessonTimer(): void {
+    if (this.timerStarted) return;
+    this.timerStarted = true;
+    this.timerInterval = setInterval(() => {
+      if (this.timerRemainingSecs > 0) {
+        this.timerRemainingSecs--;
+      } else {
+        clearInterval(this.timerInterval);
+      }
+    }, 1000);
   }
 
   // ── Controls ──────────────────────────────────────────────
@@ -387,14 +448,9 @@ export class ChatComponent implements OnInit, OnDestroy {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       this.screenStream = screenStream;
       const screenTrack = screenStream.getVideoTracks()[0];
-
       this.replaceVideoTrackInPeers(screenTrack);
-
-      // Keep webcam in PiP — don't replace it. Show screen preview separately.
       this.isScreenSharing = true;
       this.socket.emit('start-screen-share');
-
-      // Auto-revert when user clicks the browser's native "Stop sharing" button
       screenTrack.addEventListener('ended', () => {
         this.stopScreenShare();
       });
@@ -410,12 +466,10 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.screenStream.getTracks().forEach((t) => t.stop());
       this.screenStream = null;
     }
-
     const cameraTrack = this.localStream?.getVideoTracks()[0];
     if (cameraTrack) {
       this.replaceVideoTrackInPeers(cameraTrack);
     }
-
     this.isScreenSharing = false;
     this.socket.emit('stop-screen-share');
   }
@@ -434,7 +488,6 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   enableAudio(): void {
-    // Called from a real user click — satisfies browser autoplay gesture requirement
     this.remoteAudios.forEach((audio) => {
       audio.muted = false;
       if (audio.paused) audio.play().catch(() => {});
@@ -483,34 +536,20 @@ export class ChatComponent implements OnInit, OnDestroy {
     stream: MediaStream,
     userId: string
   ): void {
-    // Log stream track states for diagnosis
     const vTracks = stream.getVideoTracks();
     const aTracks = stream.getAudioTracks();
     console.log(`[STREAM] ${userId} — videoTracks: ${vTracks.length}, audioTracks: ${aTracks.length}`);
-    vTracks.forEach((t) =>
-      console.log(`  [TRACK] video: enabled=${t.enabled}, readyState=${t.readyState}, muted=${t.muted}`)
-    );
-    aTracks.forEach((t) =>
-      console.log(`  [TRACK] audio: enabled=${t.enabled}, readyState=${t.readyState}, muted=${t.muted}`)
-    );
-    if (aTracks.length === 0) {
-      console.warn(`[AUDIO] ⚠️ NO audio tracks in remote stream for ${userId}!`);
-    }
 
     const existingTile = document.getElementById('tile-' + userId);
     if (existingTile) {
-      // ICE renegotiation — swap streams on existing elements
       const existingVideo = existingTile.querySelector('video') as HTMLVideoElement | null;
       if (existingVideo) {
-        console.log(`[STREAM] renegotiation for ${userId}, swapping srcObject`);
-        // Video-only stream for the video element
         const videoOnly = new MediaStream(stream.getVideoTracks());
         existingVideo.srcObject = videoOnly;
         existingVideo.play().catch((err) => {
           if (err.name !== 'AbortError') console.error(`[STREAM] renego play error:`, err);
         });
       }
-      // Update the separate audio element
       const existingAudio = this.remoteAudios.get(userId);
       if (existingAudio && stream.getAudioTracks().length > 0) {
         existingAudio.srcObject = new MediaStream(stream.getAudioTracks());
@@ -519,11 +558,10 @@ export class ChatComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // ── Build video tile (video only, always muted) ──
     const videoOnly = new MediaStream(stream.getVideoTracks());
     video.setAttribute('playsinline', '');
     video.autoplay = true;
-    video.muted = true; // Video element is always muted — audio goes through separate <audio>
+    video.muted = true;
     video.srcObject = videoOnly;
 
     const tile = document.createElement('div');
@@ -536,30 +574,29 @@ export class ChatComponent implements OnInit, OnDestroy {
     grid.append(tile);
     this.remoteCount++;
 
+    // Start lesson timer on first remote participant
+    if (this.remoteCount >= 1 && !this.timerStarted) {
+      this.startLessonTimer();
+    }
+
     if (this.raisedHands.has(userId)) {
       this.showHandIndicator(userId, true);
     }
 
     this.remoteVideos.push(video);
-
     video.addEventListener('loadedmetadata', () => {
       console.log(`[VIDEO] loadedmetadata for ${userId}: ${video.videoWidth}x${video.videoHeight}`);
     });
     video.play().catch(() => {});
 
-    // ── Separate <audio> element for remote audio ──
-    // This prevents the browser's AEC from suppressing the local mic
     if (stream.getAudioTracks().length > 0) {
       const audio = new Audio();
       audio.srcObject = new MediaStream(stream.getAudioTracks());
       audio.autoplay = true;
       audio.muted = false;
       this.remoteAudios.set(userId, audio);
-
       audio.play()
-        .then(() => {
-          console.log(`[AUDIO] ✅ separate audio playing for ${userId}`);
-        })
+        .then(() => console.log(`[AUDIO] ✅ separate audio playing for ${userId}`))
         .catch((err) => {
           if (err.name === 'AbortError') return;
           console.warn(`[AUDIO] autoplay blocked for ${userId}, showing prompt`);
@@ -578,7 +615,6 @@ export class ChatComponent implements OnInit, OnDestroy {
       tile.remove();
       this.remoteCount = Math.max(0, this.remoteCount - 1);
     }
-    // Clean up separate audio element
     const audio = this.remoteAudios.get(userId);
     if (audio) {
       audio.pause();
@@ -619,84 +655,24 @@ export class ChatComponent implements OnInit, OnDestroy {
   ): void {
     setTimeout(() => {
       const pc: RTCPeerConnection = (call as any).peerConnection;
-      if (!pc) {
-        console.warn(`[ICE][${dir}][${userId}] peerConnection not available`);
-        return;
-      }
+      if (!pc) return;
 
-      // Log the state right now — we may have already missed early transitions
-      console.log(
-        `[ICE][${dir}][${userId}] INIT: ice=${pc.iceConnectionState}, conn=${pc.connectionState}, signaling=${pc.signalingState}`
-      );
-
-      // Use addEventListener (not onXxx) so we don't overwrite PeerJS's own handlers
       pc.addEventListener('iceconnectionstatechange', () => {
         console.log(`[ICE][${dir}][${userId}] iceConnectionState → ${pc.iceConnectionState}`);
-        if (pc.iceConnectionState === 'failed') {
-          console.error(`[ICE][${dir}][${userId}] ICE FAILED — no relay path. Check TURN credentials.`);
-        }
-        if (pc.iceConnectionState === 'disconnected') {
-          console.warn(`[ICE][${dir}][${userId}] ICE disconnected — may recover or fail`);
-        }
-        // ICE connected/completed → force video to play if it got stuck
         if (
           (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') &&
           video
         ) {
-          console.log(`[ICE][${dir}][${userId}] ICE connected — forcing video play`);
           video.muted = false;
-          if (video.paused) {
-            video.play().catch(() => {});
-          }
+          if (video.paused) video.play().catch(() => {});
         }
-      });
-
-      pc.addEventListener('icegatheringstatechange', () => {
-        console.log(`[ICE][${dir}][${userId}] iceGatheringState → ${pc.iceGatheringState}`);
-      });
-
-      pc.addEventListener('icecandidate', (event) => {
-        if (!event.candidate) {
-          console.log(`[ICE][${dir}][${userId}] candidate gathering complete`);
-          return;
-        }
-        const c = event.candidate;
-        console.log(
-          `[ICE][${dir}][${userId}] candidate: type=${c.type} protocol=${c.protocol} address=${c.address}`
-        );
       });
 
       pc.addEventListener('connectionstatechange', () => {
         console.log(`[ICE][${dir}][${userId}] connectionState → ${pc.connectionState}`);
-        if (pc.connectionState === 'connected') {
-          // Log which candidate pair was selected
-          pc.getStats().then((stats) => {
-            stats.forEach((report) => {
-              if (
-                report.type === 'candidate-pair' &&
-                (report as any).state === 'succeeded' &&
-                (report as any).nominated
-              ) {
-                const local = (stats as any).get((report as any).localCandidateId);
-                const remote = (stats as any).get((report as any).remoteCandidateId);
-                const localType = local?.candidateType ?? '?';
-                const remoteType = remote?.candidateType ?? '?';
-                console.log(
-                  `[ICE][${dir}][${userId}] ✅ SELECTED PAIR — local: ${localType}, remote: ${remoteType}` +
-                    (localType === 'relay' || remoteType === 'relay'
-                      ? ' ← TURN relay in use'
-                      : ' ← direct/STUN path')
-                );
-              }
-            });
-          });
-          // Force video play when fully connected
-          if (video) {
-            video.muted = false;
-            if (video.paused) {
-              video.play().catch(() => {});
-            }
-          }
+        if (pc.connectionState === 'connected' && video) {
+          video.muted = false;
+          if (video.paused) video.play().catch(() => {});
         }
       });
     }, 0);
