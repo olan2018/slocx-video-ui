@@ -108,6 +108,150 @@
     </div>
   </div>
 
+  <!-- ══ Quiz overlay ═════════════════════════════════════════ -->
+  <div class="quiz-overlay" *ngIf="quizActive" [class.quiz-overlay--results]="showQuizResults">
+
+    <!-- Backdrop (video stays visible behind) -->
+    <div class="quiz-backdrop"></div>
+
+    <!-- Quiz panel -->
+    <div class="quiz-panel">
+
+      <!-- Timer bar -->
+      <div class="quiz-timer-bar" *ngIf="!showQuizResults">
+        <div class="quiz-timer-fill" [style.width.%]="quizTimerProgress * 100"
+          [class.quiz-timer-fill--urgent]="quizRemainingSecs <= 10"></div>
+      </div>
+
+      <!-- Panel header -->
+      <div class="quiz-panel-header">
+        <div class="quiz-panel-title-wrap">
+          <span class="quiz-badge">Live Quiz</span>
+          <span class="quiz-title">{{ quizData?.title }}</span>
+        </div>
+        <div class="quiz-header-right" *ngIf="!showQuizResults">
+          <span class="quiz-timer-label" [class.quiz-timer-label--urgent]="quizRemainingSecs <= 10">
+            {{ quizTimerLabel }}
+          </span>
+          <button class="quiz-end-btn" *ngIf="isTutor" (click)="endQuizEarly()" title="End quiz now">
+            End
+          </button>
+        </div>
+        <button class="quiz-close-btn" *ngIf="showQuizResults" (click)="closeQuizOverlay()" title="Close">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+
+      <!-- ── Tutor view: progress tracker ── -->
+      <div class="quiz-tutor-progress" *ngIf="isTutor && !showQuizResults">
+        <i class="bi bi-people-fill"></i>
+        <span>{{ quizAnsweredCount }} student{{ quizAnsweredCount !== 1 ? 's' : '' }} answered</span>
+      </div>
+
+      <!-- ── Student view: question body ── -->
+      <ng-container *ngIf="!isTutor && !showQuizResults">
+        <div class="quiz-progress-dots">
+          <span *ngFor="let q of quizData?.questions; let i = index"
+            class="quiz-dot" [class.quiz-dot--active]="i === quizCurrentIndex"
+            [class.quiz-dot--answered]="quizAnswers.has(q.id)"
+            (click)="quizCurrentIndex = i"></span>
+        </div>
+
+        <div class="quiz-question-wrap" *ngIf="quizCurrentQuestion">
+          <p class="quiz-question-num">Question {{ quizCurrentIndex + 1 }} of {{ totalQuestions }}</p>
+          <p class="quiz-question-text">{{ quizCurrentQuestion.content }}</p>
+
+          <!-- Multiple choice -->
+          <div class="quiz-options" *ngIf="quizCurrentQuestion.question_type === 'multiple_choice'">
+            <button *ngFor="let opt of quizCurrentQuestion.options"
+              class="quiz-option-btn"
+              [class.quiz-option-btn--selected]="isAnswerSelected(quizCurrentQuestion.id, opt.id)"
+              [disabled]="quizSubmitted"
+              (click)="selectAnswer(quizCurrentQuestion.id, opt.id)">
+              {{ opt.option_text }}
+            </button>
+          </div>
+
+          <!-- Fill in the gap -->
+          <div class="quiz-fill-wrap" *ngIf="quizCurrentQuestion.question_type === 'fill_in_the_gap'">
+            <input class="quiz-fill-input"
+              type="text"
+              placeholder="Type your answer..."
+              [value]="quizAnswers.get(quizCurrentQuestion.id) || ''"
+              [disabled]="quizSubmitted"
+              (input)="selectAnswer(quizCurrentQuestion.id, $any($event.target).value)" />
+          </div>
+        </div>
+
+        <!-- Navigation row -->
+        <div class="quiz-nav-row">
+          <button class="quiz-nav-btn" (click)="prevQuestion()" [disabled]="quizCurrentIndex === 0">
+            <i class="bi bi-chevron-left"></i> Prev
+          </button>
+          <span class="quiz-answered-pill">{{ answeredCount }}/{{ totalQuestions }} answered</span>
+          <button class="quiz-nav-btn" (click)="nextQuestion()"
+            [disabled]="quizCurrentIndex === totalQuestions - 1">
+            Next <i class="bi bi-chevron-right"></i>
+          </button>
+        </div>
+
+        <!-- Submit button -->
+        <button class="quiz-submit-btn" (click)="submitQuizAnswers()" [disabled]="quizSubmitted">
+          <ng-container *ngIf="!quizSubmitted">Submit Answers</ng-container>
+          <ng-container *ngIf="quizSubmitted">
+            <i class="bi bi-check2-circle"></i> Submitted — waiting for results...
+          </ng-container>
+        </button>
+      </ng-container>
+
+      <!-- ── Results screen ── -->
+      <div class="quiz-results-wrap" *ngIf="showQuizResults">
+
+        <!-- My score -->
+        <div class="quiz-score-card" *ngIf="myQuizResult">
+          <div class="quiz-score-circle">
+            <span class="quiz-score-num">{{ myQuizResult.score }}</span>
+            <span class="quiz-score-sep">/</span>
+            <span class="quiz-score-total">{{ myQuizResult.total }}</span>
+          </div>
+          <p class="quiz-score-label">
+            {{ myQuizResult.score === myQuizResult.total ? 'Perfect score!' :
+               myQuizResult.score >= myQuizResult.total / 2 ? 'Well done!' : 'Keep practising!' }}
+          </p>
+        </div>
+
+        <!-- Answer review -->
+        <div class="quiz-review-list" *ngIf="!isTutor">
+          <div *ngFor="let q of quizData?.questions; let i = index" class="quiz-review-item"
+            [class.quiz-review-item--correct]="isQuizAnswerCorrect(q.id)"
+            [class.quiz-review-item--wrong]="!isQuizAnswerCorrect(q.id)">
+            <div class="quiz-review-qnum">
+              <i class="bi" [class.bi-check-circle-fill]="isQuizAnswerCorrect(q.id)"
+                [class.bi-x-circle-fill]="!isQuizAnswerCorrect(q.id)"></i>
+              Q{{ i + 1 }}
+            </div>
+            <p class="quiz-review-qtext">{{ q.content }}</p>
+            <p class="quiz-review-answer">
+              Your answer: <strong>{{ quizAnswers.get(q.id) || 'No answer' }}</strong>
+            </p>
+            <p class="quiz-review-correct" *ngIf="!isQuizAnswerCorrect(q.id)">
+              Correct: <strong>{{ getCorrectOption(q.id) }}</strong>
+            </p>
+          </div>
+        </div>
+
+        <!-- Tutor: see all student scores -->
+        <div class="quiz-tutor-results" *ngIf="isTutor">
+          <div *ngFor="let r of quizResults" class="quiz-tutor-row">
+            <span class="quiz-tutor-uid">{{ r.userId }}</span>
+            <span class="quiz-tutor-score">{{ r.score }}/{{ r.total }}</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ══ Bottom control bar ═══════════════════════════════════ -->
   <div class="meet-controls">
     <div class="meet-controls-inner">
@@ -159,6 +303,30 @@
         </span>
         <span class="meet-ctrl-label">Chat</span>
       </button>
+
+      <!-- Launch Quiz (tutor only) -->
+      <div class="meet-ctrl-quiz-wrap" *ngIf="isTutor">
+        <button class="meet-ctrl-btn meet-ctrl-quiz-btn"
+          [class.meet-ctrl-active]="quizLaunchOpen || quizActive"
+          (click)="toggleQuizLaunch()"
+          [disabled]="quizActive"
+          title="Launch a live quiz">
+          <i class="bi bi-question-circle-fill"></i>
+          <span class="meet-ctrl-label">Quiz</span>
+        </button>
+        <div class="quiz-launch-popover" *ngIf="quizLaunchOpen && !quizActive">
+          <p class="quiz-launch-label">Timer duration</p>
+          <div class="quiz-duration-btns">
+            <button *ngFor="let d of [30, 60, 90, 120]"
+              class="quiz-dur-btn"
+              [class.quiz-dur-btn--active]="quizLaunchDuration === d"
+              (click)="quizLaunchDuration = d">{{ d }}s</button>
+          </div>
+          <button class="quiz-launch-go-btn" (click)="launchQuiz()">
+            <i class="bi bi-play-fill"></i> Launch Now
+          </button>
+        </div>
+      </div>
 
       <!-- Leave -->
       <button class="meet-ctrl-btn meet-ctrl-leave" (click)="leaveCall()" title="Leave call">

@@ -18,6 +18,34 @@ export interface ChatMessage {
   self: boolean;
 }
 
+export interface QuizOption {
+  id: string;
+  option_text: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  question_type: string;
+  content: string;
+  correct_answer: string;
+  sort_order: number;
+  options: QuizOption[];
+}
+
+export interface LiveQuizData {
+  id: string;
+  title: string;
+  description: string;
+  questions: QuizQuestion[];
+}
+
+export interface QuizStudentResult {
+  userId: string;
+  score: number;
+  total: number;
+  answers: { questionId: string; selectedAnswer: string; isCorrect: boolean }[];
+}
+
 @Component({
   selector: 'app-chat',
   templateUrl: './chat.component.html',
@@ -65,6 +93,42 @@ export class ChatComponent implements OnInit, OnDestroy {
   isScreenSharing: boolean = false;
   private screenStream: MediaStream | null = null;
   private audioCtx: AudioContext | null = null;
+
+  // ── Role ──────────────────────────────────────────────────
+  isTutor: boolean = false;
+  private lessonId: string = '';
+
+  // ── Live Quiz ─────────────────────────────────────────────
+  /** Overlay visibility */
+  quizActive: boolean = false;
+  quizData: LiveQuizData | null = null;
+  /** Current question index (0-based) */
+  quizCurrentIndex: number = 0;
+  /** Map of questionId → selected answer (option id or text) */
+  quizAnswers: Map<string, string> = new Map();
+  /** True once student has hit Submit */
+  quizSubmitted: boolean = false;
+  /** Timer: total seconds for this session */
+  quizDurationSecs: number = 60;
+  /** Remaining seconds shown to user */
+  quizRemainingSecs: number = 60;
+  private quizTimerInterval: any = null;
+
+  /** Results after quiz ends */
+  quizResults: QuizStudentResult[] = [];
+  /** My own result */
+  myQuizResult: QuizStudentResult | null = null;
+  /** Map of questionId → isCorrect (from quiz:ended payload with correct answers revealed) */
+  quizRevealedAnswers: Map<string, boolean> = new Map();
+  quizCorrectOptions: Map<string, string> = new Map(); // questionId → correct option id / text
+  showQuizResults: boolean = false;
+
+  /** How many students have answered (live progress for tutor) */
+  quizAnsweredCount: number = 0;
+  /** Quiz duration selector visible to tutor */
+  quizLaunchOpen: boolean = false;
+  quizLaunchDuration: number = 60;
+  // ─────────────────────────────────────────────────────────
 
   // ── Lesson timer ──────────────────────────────────────────
   /** Total lesson duration in seconds (from URL ?duration=N minutes, default 60 min) */
@@ -132,6 +196,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     const name = parsed['name'] as string;
     const photo = parsed['photo'] as string;
     const durationParam = parsed['duration'] as string;
+    const roleParam = parsed['role'] as string;
+
+    this.isTutor = roleParam === 'tutor';
+    this.lessonId = room; // room param is the lesson ID
 
     // Parse lesson duration
     const durationMins = parseInt(durationParam, 10);
@@ -210,6 +278,28 @@ export class ChatComponent implements OnInit, OnDestroy {
       }
       this.removeParticipant(userId);
     });
+
+    // ── Quiz socket events ────────────────────────────────────────────────
+    this.socket.on('quiz:started', (payload: { quiz: LiveQuizData; durationSecs: number }) => {
+      this.startQuizOverlay(payload.quiz, payload.durationSecs);
+    });
+
+    this.socket.on('quiz:progress', (payload: { answered: number }) => {
+      this.quizAnsweredCount = payload.answered;
+    });
+
+    this.socket.on('quiz:ended', (payload: {
+      quiz: LiveQuizData; // full quiz WITH correct answers
+      studentResults: QuizStudentResult[];
+      durationSecs: number;
+    }) => {
+      this.endQuizOverlay(payload.quiz, payload.studentResults);
+    });
+
+    this.socket.on('quiz:error', (payload: { message: string }) => {
+      console.warn('[QUIZ] error:', payload.message);
+    });
+    // ─────────────────────────────────────────────────────────────────────
 
     fetch(`${environment.apiUrl}/v1/turn/credentials`)
       .then((res) => (res.ok ? res.json() : null))
@@ -330,6 +420,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     clearInterval(this.clockInterval);
     clearInterval(this.timerInterval);
+    if (this.quizTimerInterval) clearInterval(this.quizTimerInterval);
     this.stopLocalStream();
     this.remoteAudios.forEach((audio) => {
       audio.pause();
@@ -505,6 +596,156 @@ export class ChatComponent implements OnInit, OnDestroy {
       window.location.href = 'about:blank';
     }, 300);
   }
+
+  // ── Quiz controls ─────────────────────────────────────────
+
+  toggleQuizLaunch(): void {
+    this.quizLaunchOpen = !this.quizLaunchOpen;
+  }
+
+  launchQuiz(): void {
+    this.quizLaunchOpen = false;
+    this.socket.emit('quiz:launch', {
+      lessonId: this.lessonId,
+      durationSecs: this.quizLaunchDuration,
+    });
+  }
+
+  endQuizEarly(): void {
+    this.socket.emit('quiz:end-early');
+  }
+
+  get quizCurrentQuestion(): QuizQuestion | null {
+    if (!this.quizData) return null;
+    return this.quizData.questions[this.quizCurrentIndex] ?? null;
+  }
+
+  get quizTimerProgress(): number {
+    if (this.quizDurationSecs === 0) return 1;
+    return this.quizRemainingSecs / this.quizDurationSecs;
+  }
+
+  get quizTimerLabel(): string {
+    const s = Math.max(0, this.quizRemainingSecs);
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  }
+
+  selectAnswer(questionId: string, answer: string): void {
+    if (this.quizSubmitted) return;
+    this.quizAnswers.set(questionId, answer);
+  }
+
+  isAnswerSelected(questionId: string, answer: string): boolean {
+    return this.quizAnswers.get(questionId) === answer;
+  }
+
+  nextQuestion(): void {
+    if (!this.quizData) return;
+    if (this.quizCurrentIndex < this.quizData.questions.length - 1) {
+      this.quizCurrentIndex++;
+    }
+  }
+
+  prevQuestion(): void {
+    if (this.quizCurrentIndex > 0) {
+      this.quizCurrentIndex--;
+    }
+  }
+
+  submitQuizAnswers(): void {
+    if (this.quizSubmitted || !this.quizData) return;
+    this.quizSubmitted = true;
+    const answersObj: Record<string, string> = {};
+    this.quizAnswers.forEach((val, key) => { answersObj[key] = val; });
+    this.socket.emit('quiz:answer', { answers: answersObj });
+  }
+
+  private startQuizOverlay(quiz: LiveQuizData, durationSecs: number): void {
+    this.quizData = quiz;
+    this.quizDurationSecs = durationSecs;
+    this.quizRemainingSecs = durationSecs;
+    this.quizCurrentIndex = 0;
+    this.quizAnswers = new Map();
+    this.quizSubmitted = false;
+    this.showQuizResults = false;
+    this.quizAnsweredCount = 0;
+    this.quizActive = true;
+
+    if (this.quizTimerInterval) clearInterval(this.quizTimerInterval);
+    this.quizTimerInterval = setInterval(() => {
+      if (this.quizRemainingSecs > 0) {
+        this.quizRemainingSecs--;
+      } else {
+        clearInterval(this.quizTimerInterval);
+        if (!this.quizSubmitted) {
+          this.submitQuizAnswers();
+        }
+      }
+    }, 1000);
+  }
+
+  private endQuizOverlay(quizWithAnswers: LiveQuizData, results: QuizStudentResult[]): void {
+    if (this.quizTimerInterval) {
+      clearInterval(this.quizTimerInterval);
+      this.quizTimerInterval = null;
+    }
+    this.quizResults = results;
+    this.showQuizResults = true;
+    this.quizSubmitted = true;
+
+    // Build correct-answer lookup from the full quiz data returned by server
+    this.quizRevealedAnswers = new Map();
+    this.quizCorrectOptions = new Map();
+    quizWithAnswers.questions.forEach((q) => {
+      if (q.question_type === 'multiple_choice') {
+        const correctOpt = (q as any).options?.find((o: any) => o.is_correct);
+        if (correctOpt) this.quizCorrectOptions.set(q.id, correctOpt.id);
+      } else {
+        this.quizCorrectOptions.set(q.id, q.correct_answer);
+      }
+    });
+
+    // Find my result (username = userId)
+    this.myQuizResult = results.find((r) => r.userId === this.myUsername) ?? null;
+    if (this.myQuizResult) {
+      this.myQuizResult.answers.forEach((a) => {
+        this.quizRevealedAnswers.set(a.questionId, a.isCorrect);
+      });
+    }
+
+    // Set data to the full quiz with answers so review shows correctly
+    this.quizData = quizWithAnswers;
+  }
+
+  closeQuizOverlay(): void {
+    this.quizActive = false;
+    this.quizData = null;
+    this.showQuizResults = false;
+    if (this.quizTimerInterval) {
+      clearInterval(this.quizTimerInterval);
+      this.quizTimerInterval = null;
+    }
+  }
+
+  get answeredCount(): number {
+    return this.quizAnswers.size;
+  }
+
+  get totalQuestions(): number {
+    return this.quizData?.questions.length ?? 0;
+  }
+
+  isQuizAnswerCorrect(questionId: string): boolean {
+    return this.quizRevealedAnswers.get(questionId) ?? false;
+  }
+
+  getCorrectOption(questionId: string): string {
+    return this.quizCorrectOptions.get(questionId) ?? '';
+  }
+
+  // ─────────────────────────────────────────────────────────
 
   // ── Internal helpers ──────────────────────────────────────
 
