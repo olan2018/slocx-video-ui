@@ -304,6 +304,9 @@
         <span class="meet-ctrl-label">Chat</span>
       </button>
 
+      <!-- Quiz error toast -->
+      <div class="quiz-error-toast" *ngIf="quizErrorMsg">{{ quizErrorMsg }}</div>
+
       <!-- Launch Quiz (tutor only) -->
       <div class="meet-ctrl-quiz-wrap" *ngIf="isTutor">
         <button class="meet-ctrl-btn meet-ctrl-quiz-btn"

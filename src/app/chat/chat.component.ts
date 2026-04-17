@@ -128,6 +128,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   /** Quiz duration selector visible to tutor */
   quizLaunchOpen: boolean = false;
   quizLaunchDuration: number = 60;
+  quizErrorMsg: string = '';
   // ─────────────────────────────────────────────────────────
 
   // ── Lesson timer ──────────────────────────────────────────
@@ -298,6 +299,8 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     this.socket.on('quiz:error', (payload: { message: string }) => {
       console.warn('[QUIZ] error:', payload.message);
+      this.quizErrorMsg = payload.message;
+      setTimeout(() => { this.quizErrorMsg = ''; }, 5000);
     });
     // ─────────────────────────────────────────────────────────────────────
 
