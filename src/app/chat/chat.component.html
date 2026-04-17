@@ -145,7 +145,13 @@
       <!-- ── Tutor view: progress tracker ── -->
       <div class="quiz-tutor-progress" *ngIf="isTutor && !showQuizResults">
         <i class="bi bi-people-fill"></i>
-        <span>{{ quizAnsweredCount }} student{{ quizAnsweredCount !== 1 ? 's' : '' }} answered</span>
+        <span>{{ quizAnsweredCount }}/{{ quizStudentTotal }} student{{ quizStudentTotal !== 1 ? 's' : '' }} answered</span>
+        <span class="quiz-tutor-waiting" *ngIf="quizAnsweredCount > 0 && quizAnsweredCount < quizStudentTotal">
+          — waiting for others...
+        </span>
+        <span class="quiz-tutor-all-done" *ngIf="quizAnsweredCount > 0 && quizAnsweredCount >= quizStudentTotal">
+          — all done!
+        </span>
       </div>
 
       <!-- ── Student view: question body ── -->
@@ -207,46 +213,88 @@
       <!-- ── Results screen ── -->
       <div class="quiz-results-wrap" *ngIf="showQuizResults">
 
-        <!-- My score -->
-        <div class="quiz-score-card" *ngIf="myQuizResult">
-          <div class="quiz-score-circle">
-            <span class="quiz-score-num">{{ myQuizResult.score }}</span>
-            <span class="quiz-score-sep">/</span>
-            <span class="quiz-score-total">{{ myQuizResult.total }}</span>
-          </div>
-          <p class="quiz-score-label">
-            {{ myQuizResult.score === myQuizResult.total ? 'Perfect score!' :
-               myQuizResult.score >= myQuizResult.total / 2 ? 'Well done!' : 'Keep practising!' }}
-          </p>
-        </div>
-
-        <!-- Answer review -->
-        <div class="quiz-review-list" *ngIf="!isTutor">
-          <div *ngFor="let q of quizData?.questions; let i = index" class="quiz-review-item"
-            [class.quiz-review-item--correct]="isQuizAnswerCorrect(q.id)"
-            [class.quiz-review-item--wrong]="!isQuizAnswerCorrect(q.id)">
-            <div class="quiz-review-qnum">
-              <i class="bi" [class.bi-check-circle-fill]="isQuizAnswerCorrect(q.id)"
-                [class.bi-x-circle-fill]="!isQuizAnswerCorrect(q.id)"></i>
-              Q{{ i + 1 }}
+        <!-- ── Student: my score + answer review ── -->
+        <ng-container *ngIf="!isTutor">
+          <div class="quiz-score-card" *ngIf="myQuizResult">
+            <div class="quiz-score-circle">
+              <span class="quiz-score-num">{{ myQuizResult.score }}</span>
+              <span class="quiz-score-sep">/</span>
+              <span class="quiz-score-total">{{ myQuizResult.total }}</span>
             </div>
-            <p class="quiz-review-qtext">{{ q.content }}</p>
-            <p class="quiz-review-answer">
-              Your answer: <strong>{{ quizAnswers.get(q.id) || 'No answer' }}</strong>
-            </p>
-            <p class="quiz-review-correct" *ngIf="!isQuizAnswerCorrect(q.id)">
-              Correct: <strong>{{ getCorrectOption(q.id) }}</strong>
+            <p class="quiz-score-label">
+              {{ myQuizResult.score === myQuizResult.total ? 'Perfect score!' :
+                 myQuizResult.score >= myQuizResult.total / 2 ? 'Well done!' : 'Keep practising!' }}
             </p>
           </div>
-        </div>
 
-        <!-- Tutor: see all student scores -->
-        <div class="quiz-tutor-results" *ngIf="isTutor">
-          <div *ngFor="let r of quizResults" class="quiz-tutor-row">
-            <span class="quiz-tutor-uid">{{ r.userId }}</span>
-            <span class="quiz-tutor-score">{{ r.score }}/{{ r.total }}</span>
+          <div class="quiz-review-list">
+            <div *ngFor="let a of myQuizResult?.answers; let i = index" class="quiz-review-item"
+              [class.quiz-review-item--correct]="a.isCorrect"
+              [class.quiz-review-item--wrong]="!a.isCorrect">
+              <div class="quiz-review-qnum">
+                <i class="bi" [class.bi-check-circle-fill]="a.isCorrect"
+                  [class.bi-x-circle-fill]="!a.isCorrect"></i>
+                Q{{ i + 1 }}
+              </div>
+              <p class="quiz-review-qtext">{{ a.questionText }}</p>
+              <p class="quiz-review-answer">
+                Your answer: <strong>{{ a.selectedAnswerText }}</strong>
+              </p>
+              <p class="quiz-review-correct" *ngIf="!a.isCorrect">
+                Correct answer: <strong>{{ a.correctAnswerText }}</strong>
+              </p>
+            </div>
           </div>
-        </div>
+        </ng-container>
+
+        <!-- ── Tutor: all students' scores + expandable detail ── -->
+        <ng-container *ngIf="isTutor">
+          <div class="quiz-tutor-summary">
+            <p class="quiz-tutor-summary-title">Results</p>
+            <p class="quiz-tutor-summary-sub">{{ quizResults.length }} student{{ quizResults.length !== 1 ? 's' : '' }} answered</p>
+          </div>
+
+          <div class="quiz-tutor-results">
+            <div *ngFor="let r of quizResults; let ri = index" class="quiz-tutor-card">
+              <!-- Student header row (clickable to expand) -->
+              <div class="quiz-tutor-card-header" (click)="tutorExpandedStudent = tutorExpandedStudent === ri ? -1 : ri">
+                <div class="quiz-tutor-card-left">
+                  <span class="quiz-tutor-name">{{ r.displayName }}</span>
+                </div>
+                <div class="quiz-tutor-card-right">
+                  <span class="quiz-tutor-score"
+                    [class.quiz-tutor-score--good]="r.score >= r.total / 2"
+                    [class.quiz-tutor-score--bad]="r.score < r.total / 2">
+                    {{ r.score }}/{{ r.total }}
+                  </span>
+                  <i class="bi" [class.bi-chevron-down]="tutorExpandedStudent !== ri"
+                    [class.bi-chevron-up]="tutorExpandedStudent === ri"
+                    style="font-size:14px; color: var(--text-secondary)"></i>
+                </div>
+              </div>
+
+              <!-- Expanded: per-question detail -->
+              <div class="quiz-tutor-card-detail" *ngIf="tutorExpandedStudent === ri">
+                <div *ngFor="let a of r.answers; let ai = index" class="quiz-tutor-answer-row"
+                  [class.quiz-tutor-answer-row--correct]="a.isCorrect"
+                  [class.quiz-tutor-answer-row--wrong]="!a.isCorrect">
+                  <div class="quiz-tutor-answer-icon">
+                    <i class="bi" [class.bi-check-circle-fill]="a.isCorrect"
+                      [class.bi-x-circle-fill]="!a.isCorrect"></i>
+                  </div>
+                  <div class="quiz-tutor-answer-body">
+                    <p class="quiz-tutor-answer-q">Q{{ ai + 1 }}: {{ a.questionText }}</p>
+                    <p class="quiz-tutor-answer-a">Answered: <strong>{{ a.selectedAnswerText }}</strong></p>
+                    <p class="quiz-tutor-answer-c" *ngIf="!a.isCorrect">
+                      Correct: <strong>{{ a.correctAnswerText }}</strong>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ng-container>
+
       </div>
 
     </div>

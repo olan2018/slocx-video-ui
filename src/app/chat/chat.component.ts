@@ -39,11 +39,22 @@ export interface LiveQuizData {
   questions: QuizQuestion[];
 }
 
+export interface QuizAnswerDetail {
+  questionId: string;
+  questionText: string;
+  questionType: string;
+  selectedAnswer: string;
+  selectedAnswerText: string;
+  correctAnswerText: string;
+  isCorrect: boolean;
+}
+
 export interface QuizStudentResult {
   userId: string;
+  displayName: string;
   score: number;
   total: number;
-  answers: { questionId: string; selectedAnswer: string; isCorrect: boolean }[];
+  answers: QuizAnswerDetail[];
 }
 
 @Component({
@@ -125,10 +136,13 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   /** How many students have answered (live progress for tutor) */
   quizAnsweredCount: number = 0;
+  quizStudentTotal: number = 0;
   /** Quiz duration selector visible to tutor */
   quizLaunchOpen: boolean = false;
   quizLaunchDuration: number = 60;
   quizErrorMsg: string = '';
+  /** Index of student result expanded in tutor view (-1 = none) */
+  tutorExpandedStudent: number = -1;
   // ─────────────────────────────────────────────────────────
 
   // ── Lesson timer ──────────────────────────────────────────
@@ -285,8 +299,9 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.startQuizOverlay(payload.quiz, payload.durationSecs);
     });
 
-    this.socket.on('quiz:progress', (payload: { answered: number }) => {
+    this.socket.on('quiz:progress', (payload: { answered: number; total: number }) => {
       this.quizAnsweredCount = payload.answered;
+      this.quizStudentTotal = payload.total;
     });
 
     this.socket.on('quiz:ended', (payload: {

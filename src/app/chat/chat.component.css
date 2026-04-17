@@ -1288,3 +1288,100 @@
   from { opacity: 0; transform: translateX(-50%) translateY(8px); }
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
+
+/* ── Tutor results (expanded) ── */
+.quiz-tutor-summary {
+  padding: 16px 0 8px;
+}
+.quiz-tutor-summary-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+.quiz-tutor-summary-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+}
+
+.quiz-tutor-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+.quiz-tutor-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.quiz-tutor-card-header:hover { background: var(--bg-hover); }
+.quiz-tutor-card-left { display: flex; align-items: center; gap: 8px; }
+.quiz-tutor-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.quiz-tutor-card-right { display: flex; align-items: center; gap: 10px; }
+.quiz-tutor-score {
+  font-size: 16px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 20px;
+}
+.quiz-tutor-score--good { color: #34a853; background: rgba(52, 168, 83, 0.12); }
+.quiz-tutor-score--bad  { color: var(--danger); background: rgba(234, 67, 53, 0.1); }
+
+.quiz-tutor-card-detail {
+  padding: 0 14px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.quiz-tutor-answer-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.quiz-tutor-answer-row:last-child { border-bottom: none; }
+.quiz-tutor-answer-row--correct .quiz-tutor-answer-icon { color: #34a853; }
+.quiz-tutor-answer-row--wrong .quiz-tutor-answer-icon { color: var(--danger); }
+.quiz-tutor-answer-icon {
+  flex-shrink: 0;
+  padding-top: 2px;
+  font-size: 16px;
+}
+.quiz-tutor-answer-body { flex: 1; min-width: 0; }
+.quiz-tutor-answer-q {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+  margin: 0 0 3px;
+}
+.quiz-tutor-answer-a {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+.quiz-tutor-answer-a strong { color: var(--text-primary); }
+.quiz-tutor-answer-c {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+}
+.quiz-tutor-answer-c strong { color: #34a853; }
+
+/* Tutor progress extras */
+.quiz-tutor-waiting {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+.quiz-tutor-all-done {
+  color: #34a853;
+  font-weight: 600;
+}
