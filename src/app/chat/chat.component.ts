@@ -404,6 +404,10 @@ export class ChatComponent implements OnInit, OnDestroy {
 
             this.myPeer.on('call', (call: MediaConnection) => {
               call.answer(stream);
+              // Track incoming calls in `this.peers` so we can replaceTrack later
+              // (e.g. for screen-share). Without this, the answerer's peer map is
+              // empty and their screen-share never reaches the caller.
+              this.peers[call.peer] = call;
               const video = document.createElement('video');
               video.setAttribute('playsinline', '');
               video.autoplay = true;
@@ -414,6 +418,7 @@ export class ChatComponent implements OnInit, OnDestroy {
               call.on('close', () => {
                 console.warn(`[PEER] incoming call closed for ${call.peer}`);
                 this.removeParticipant(call.peer);
+                delete this.peers[call.peer];
               });
               call.on('error', (err: any) => {
                 console.error('[PEER] call error:', err);
@@ -559,6 +564,13 @@ export class ChatComponent implements OnInit, OnDestroy {
       const screenTrack = screenStream.getVideoTracks()[0];
       this.replaceVideoTrackInPeers(screenTrack);
       this.isScreenSharing = true;
+      // Show the screen in the local PiP so the user sees what they're sharing
+      // (and the unmirrored CSS rule for .screen-sharing finally applies to a
+      // genuinely-unmirrored stream — fixes the "inverted self" bug).
+      if (this.localVideoEl?.nativeElement) {
+        this.localVideoEl.nativeElement.srcObject = screenStream;
+        this.localVideoEl.nativeElement.play().catch(() => {});
+      }
       this.socket.emit('start-screen-share');
       screenTrack.addEventListener('ended', () => {
         this.stopScreenShare();
@@ -578,6 +590,11 @@ export class ChatComponent implements OnInit, OnDestroy {
     const cameraTrack = this.localStream?.getVideoTracks()[0];
     if (cameraTrack) {
       this.replaceVideoTrackInPeers(cameraTrack);
+    }
+    // Restore the camera stream in the local PiP
+    if (this.localVideoEl?.nativeElement && this.localStream) {
+      this.localVideoEl.nativeElement.srcObject = this.localStream;
+      this.localVideoEl.nativeElement.play().catch(() => {});
     }
     this.isScreenSharing = false;
     this.socket.emit('stop-screen-share');
