@@ -48,7 +48,7 @@
   </div>
 
   <!-- ══ Main area ════════════════════════════════════════════ -->
-  <div class="meet-main">
+  <div class="meet-main" [class.meet-main--local-pinned]="pinnedPeerId === 'local'">
 
     <!-- Permission denied -->
     <div class="meet-state" *ngIf="permissionError">
