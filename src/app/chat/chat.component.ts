@@ -65,6 +65,11 @@ export interface QuizStudentResult {
 export class ChatComponent implements OnInit, OnDestroy {
   @ViewChild('videos') videoGrid!: ElementRef;
   @ViewChild('localVideo') localVideoEl!: ElementRef<HTMLVideoElement>;
+  // Second local video element used as the "spotlight" tile when the user
+  // pins themselves. Bound to the same MediaStream as `localVideoEl` so
+  // mic/cam toggles propagate automatically. `{ static: false }` because
+  // it's inside an *ngIf and only exists after pinnedPeerId === 'local'.
+  @ViewChild('localSpotlightVideo') localSpotlightVideoEl?: ElementRef<HTMLVideoElement>;
 
   // State
   isMuted: boolean = false;
@@ -108,6 +113,30 @@ export class ChatComponent implements OnInit, OnDestroy {
   // ── Role ──────────────────────────────────────────────────
   isTutor: boolean = false;
   private lessonId: string = '';
+
+  // ── Spotlight / pin ───────────────────────────────────────
+  // Google-Meet-style local pinning. Click any tile (remote OR the local
+  // PiP) to expand it as the main view; others shrink to a thumbnail
+  // strip. Purely local — no signaling, every participant controls their
+  // own view independently. `'local'` is the sentinel for the local user's
+  // own stream; any other value is a remote peerId.
+  pinnedPeerId: string | null = null;
+
+  // ── Post-call rating ───────────────────────────────────────
+  // `reviewTicket` is the HMAC-signed capability token the slocx-frontend
+  // mints when the student clicks "Join class". It encodes (user_id,
+  // tutor_id, lesson_id, exp) — backend verifies the signature on POST.
+  // No JWT crosses tab boundaries. If the ticket is missing (legacy
+  // link, mint failed, opened directly), the popup is suppressed.
+  private reviewTicket: string = '';
+  showRatingModal: boolean = false;
+  ratingValue: number = 0;
+  ratingHoverValue: number = 0;
+  ratingComment: string = '';
+  ratingSubmitting: boolean = false;
+  ratingError: string = '';
+  ratingDone: boolean = false;
+  // ─────────────────────────────────────────────────────────
 
   // ── Live Quiz ─────────────────────────────────────────────
   /** Overlay visibility */
@@ -215,6 +244,8 @@ export class ChatComponent implements OnInit, OnDestroy {
 
     this.isTutor = roleParam === 'tutor';
     this.lessonId = room; // room param is the lesson ID
+    // Optional capability token — see `reviewTicket` field comment.
+    this.reviewTicket = (parsed['ticket'] as string) || '';
 
     // Parse lesson duration
     const durationMins = parseInt(durationParam, 10);
@@ -501,6 +532,74 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.socket.emit(this.handRaised ? 'raise-hand' : 'lower-hand');
   }
 
+  // ── Spotlight / pin ──────────────────────────────────────
+  //
+  // Single source of truth: `this.pinnedPeerId`. Remote tiles are
+  // built by hand via `document.createElement` in `addRemoteStream`, so
+  // we can't use Angular bindings for the per-tile class — instead we
+  // sync the `.meet-video-tile--pinned` class onto / off the DOM nodes
+  // imperatively whenever the pin changes. The grid container itself is
+  // Angular-managed, so the `has-pinned` class binding handles the
+  // outer layout swap.
+  togglePin(peerId: string): void {
+    if (this.pinnedPeerId === peerId) {
+      this.unpin();
+      return;
+    }
+    this.applyPinClass(this.pinnedPeerId, false);
+    this.pinnedPeerId = peerId;
+    this.applyPinClass(peerId, true);
+  }
+
+  unpin(): void {
+    if (this.pinnedPeerId) {
+      this.applyPinClass(this.pinnedPeerId, false);
+    }
+    this.pinnedPeerId = null;
+  }
+
+  /** Toggle the local user's own pin. The local stream lives in a separate
+   *  PiP element; when pinned, an Angular-rendered "spotlight" video takes
+   *  the main slot and the PiP hides itself. */
+  togglePinLocal(): void {
+    this.togglePin('local');
+    // After the *ngIf swaps in the spotlight tile we need to wire its
+    // <video> srcObject by hand — Angular doesn't have a [srcObject]
+    // input binding. Defer until the next tick so the ViewChild is
+    // populated, otherwise the lookup misses on the first frame.
+    if (this.pinnedPeerId === 'local') {
+      setTimeout(() => this.bindLocalSpotlightStream(), 0);
+    }
+  }
+
+  private bindLocalSpotlightStream(): void {
+    const el = this.localSpotlightVideoEl?.nativeElement;
+    if (!el || !this.localStream) return;
+    // Reuse the same stream — mic/cam toggles on `localStream` propagate
+    // automatically because tracks are shared. Mute the audio side of this
+    // mirror to avoid feedback (the PiP is also muted for the same reason).
+    el.srcObject = this.localStream;
+    el.muted = true;
+    el.play().catch(() => {});
+  }
+
+  /** True when the click should be treated as a pin gesture on a tile
+   *  rather than a drag/scroll. Used by the grid event-delegation handler. */
+  onGridClick(ev: MouseEvent): void {
+    const target = ev.target as HTMLElement | null;
+    const tile = target?.closest('.meet-video-tile') as HTMLElement | null;
+    if (!tile || !tile.id) return;
+    const peerId = tile.id.replace(/^tile-/, '');
+    if (peerId) this.togglePin(peerId);
+  }
+
+  private applyPinClass(peerId: string | null, on: boolean): void {
+    if (!peerId || peerId === 'local') return; // local tile is Angular-rendered
+    const el = document.getElementById('tile-' + peerId);
+    if (!el) return;
+    el.classList.toggle('meet-video-tile--pinned', on);
+  }
+
   toggleReactions(): void {
     this.reactionsOpen = !this.reactionsOpen;
   }
@@ -622,14 +721,107 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   leaveCall(): void {
+    // End the media side of the call immediately — the student should not
+    // keep streaming while the rating modal is open. Once destroyed, even if
+    // the user dismisses without submitting, the call is genuinely over.
     this.stopLocalStream();
     if (this.myPeer) {
       this.myPeer.destroy();
     }
+
+    // Show the rating modal only for students who arrived with a review
+    // ticket. Tutors and legacy/unauthenticated meeting links skip it.
+    if (!this.isTutor && this.reviewTicket) {
+      this.showRatingModal = true;
+      return;
+    }
+    this.exitWindow();
+  }
+
+  /** Final exit step — close the tab or fall back to `about:blank` if the
+   *  window wasn't opened with `window.open` (browsers will refuse the close
+   *  in that case). Used by both the legacy leave path and the rating modal. */
+  private exitWindow(): void {
     window.close();
     setTimeout(() => {
       window.location.href = 'about:blank';
     }, 300);
+  }
+
+  // ── Rating modal ──────────────────────────────────────────
+
+  setRating(stars: number): void {
+    if (this.ratingSubmitting || this.ratingDone) return;
+    this.ratingValue = stars;
+  }
+
+  setRatingHover(stars: number): void {
+    if (this.ratingSubmitting || this.ratingDone) return;
+    this.ratingHoverValue = stars;
+  }
+
+  clearRatingHover(): void {
+    this.ratingHoverValue = 0;
+  }
+
+  /** Send the review to the backend's ticket-authenticated endpoint. The
+   *  ticket itself is the credential — it encodes user/tutor/lesson and
+   *  expires shortly after class. No JWT, no Authorization header. */
+  async submitRating(): Promise<void> {
+    if (this.ratingSubmitting || this.ratingDone) return;
+    if (this.ratingValue < 1 || this.ratingValue > 5) {
+      this.ratingError = 'Please pick a star rating from 1 to 5.';
+      return;
+    }
+    if (!this.ratingComment.trim()) {
+      this.ratingError = 'Please leave a short comment so the tutor knows what worked.';
+      return;
+    }
+    if (!this.reviewTicket) {
+      // Should never happen — leaveCall() only opens the modal when a
+      // ticket is present. Belt and braces.
+      this.ratingError = 'Missing review ticket — please leave a review from your dashboard instead.';
+      return;
+    }
+
+    this.ratingError = '';
+    this.ratingSubmitting = true;
+
+    try {
+      const res = await fetch(`${environment.apiUrl}/v1/review/by-ticket`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticket: this.reviewTicket,
+          rating: this.ratingValue,
+          comment: this.ratingComment.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        this.ratingDone = true;
+        // Auto-close after a short beat so the student sees the thanks state.
+        setTimeout(() => this.exitWindow(), 1500);
+        return;
+      }
+      let msg = 'Could not submit your review.';
+      try {
+        const body = await res.json();
+        msg = body?.error || body?.message || msg;
+      } catch (_) {}
+      this.ratingError = msg;
+    } catch (err) {
+      console.error('[REVIEW] submit error:', err);
+      this.ratingError = 'Network error — please try again or skip.';
+    } finally {
+      this.ratingSubmitting = false;
+    }
+  }
+
+  /** "Maybe later" — closes the modal and exits without writing a review. */
+  skipRating(): void {
+    if (this.ratingSubmitting) return;
+    this.exitWindow();
   }
 
   // ── Quiz controls ─────────────────────────────────────────
@@ -845,6 +1037,23 @@ export class ChatComponent implements OnInit, OnDestroy {
     tile.id = 'tile-' + userId;
     tile.append(video);
 
+    // Visual pin affordance — a circular icon that appears on hover. The
+    // click is captured by event delegation on the grid (see onGridClick)
+    // so we don't need a per-tile listener. The icon swaps its bi-* class
+    // on .meet-video-tile--pinned so the user sees the current state.
+    const pinBtn = document.createElement('button');
+    pinBtn.classList.add('meet-video-tile-pin');
+    pinBtn.title = 'Pin / unpin';
+    pinBtn.innerHTML = '<i class="bi bi-pin-angle-fill"></i>';
+    pinBtn.setAttribute('aria-label', 'Pin this participant');
+    tile.append(pinBtn);
+
+    // Auto-apply the pinned class if this tile is the one currently
+    // spotlighted — happens when a participant reconnects mid-pin.
+    if (this.pinnedPeerId === userId) {
+      tile.classList.add('meet-video-tile--pinned');
+    }
+
     const grid = this.videoGrid?.nativeElement ?? document.querySelector('.meet-video-grid');
     if (!grid) return;
     grid.append(tile);
@@ -899,6 +1108,11 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
     if (this.remoteCount === 0) {
       this.showAudioPrompt = false;
+    }
+    // Drop the spotlight if the pinned participant just left, otherwise
+    // the grid would stay in pinned-layout mode with nothing to spotlight.
+    if (this.pinnedPeerId === userId) {
+      this.pinnedPeerId = null;
     }
   }
 

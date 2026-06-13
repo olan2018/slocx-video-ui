@@ -77,8 +77,30 @@
       <p class="meet-state-sub">Waiting for others to join — the timer will start once your lesson partner arrives.</p>
     </div>
 
-    <!-- Remote video grid -->
-    <div class="meet-video-grid" #videos [class.has-remotes]="remoteCount > 0"></div>
+    <!-- Local "spotlight" tile — only mounted when the user pins themselves.
+         We bind a SECOND video element to the same local MediaStream so the
+         PiP can stay structurally where it is; CSS hides the PiP while this
+         spotlight tile is up, and the original camera/mic toggles continue
+         to drive both videos because they share the same stream. -->
+    <div class="meet-video-tile meet-video-tile--pinned meet-video-tile--local"
+         *ngIf="pinnedPeerId === 'local'">
+      <video #localSpotlightVideo autoplay muted playsinline></video>
+      <button class="meet-video-tile-pin meet-video-tile-pin--active"
+              (click)="unpin()" title="Unpin">
+        <i class="bi bi-pin-angle-fill"></i>
+      </button>
+      <div class="meet-video-tile-name">You</div>
+    </div>
+
+    <!-- Remote video grid. `has-pinned` reshapes the layout so the pinned
+         remote tile takes the bulk of the area while the rest become a
+         thumbnail strip. Click events bubble up to the grid where we
+         resolve which tile was hit via event delegation (`onGridClick`)
+         — needed because tiles are created imperatively, not via *ngFor. -->
+    <div class="meet-video-grid" #videos
+         [class.has-remotes]="remoteCount > 0"
+         [class.has-pinned]="!!pinnedPeerId && pinnedPeerId !== 'local'"
+         (click)="onGridClick($event)"></div>
 
     <!-- Audio blocked prompt -->
     <div class="audio-prompt" *ngIf="showAudioPrompt" (click)="enableAudio()">
@@ -94,8 +116,14 @@
       </div>
     </div>
 
-    <!-- Local video PiP -->
-    <div class="meet-pip" [class.screen-sharing]="isScreenSharing" *ngIf="!permissionError">
+    <!-- Local video PiP. Clicking the body of the PiP pins the local user
+         (swaps in the spotlight tile above and CSS hides this element). -->
+    <div class="meet-pip"
+         [class.screen-sharing]="isScreenSharing"
+         [class.is-hidden]="pinnedPeerId === 'local'"
+         *ngIf="!permissionError"
+         (click)="togglePinLocal()"
+         title="Click to spotlight yourself">
       <video #localVideo autoplay muted playsinline></video>
       <div class="meet-pip-overlay">
         <span class="meet-name-tag">You</span>
@@ -104,6 +132,10 @@
           <i class="bi bi-mic-mute-fill" *ngIf="isMuted" style="color:#ea4335"></i>
           <i class="bi bi-camera-video-off-fill" *ngIf="!isCameraOn" style="color:#ea4335; margin-left:4px"></i>
         </div>
+      </div>
+      <!-- Pin hint that fades in on hover. -->
+      <div class="meet-pip-pin-hint">
+        <i class="bi bi-pin-angle-fill"></i> Spotlight me
       </div>
     </div>
   </div>
@@ -424,6 +456,70 @@
       <button class="chat-send-btn" (click)="sendMessage()" [disabled]="!chatInput.trim()">
         <i class="bi bi-send-fill"></i>
       </button>
+    </div>
+  </div>
+
+  <!-- ══ Rating modal (student, after Leave) ════════════════════
+       Shown by leaveCall() once the local stream is torn down. The
+       student can give 1–5 stars + a short comment, or skip.
+       Optional `lesson_id` is sent so the review links back to this class. -->
+  <div class="rating-overlay" *ngIf="showRatingModal">
+    <div class="rating-modal" role="dialog" aria-labelledby="rating-title">
+
+      <!-- Thanks state (after a successful POST) -->
+      <ng-container *ngIf="ratingDone; else ratingForm">
+        <div class="rating-thanks">
+          <div class="rating-thanks-icon"><i class="bi bi-check-circle-fill"></i></div>
+          <h3 class="rating-title">Thanks for your review!</h3>
+          <p class="rating-sub">Closing the classroom…</p>
+        </div>
+      </ng-container>
+
+      <ng-template #ratingForm>
+        <h3 class="rating-title" id="rating-title">How was your class?</h3>
+        <p class="rating-sub">Your feedback helps your tutor improve.</p>
+
+        <!-- Stars -->
+        <div class="rating-stars" (mouseleave)="clearRatingHover()">
+          <button type="button" class="rating-star"
+                  *ngFor="let s of [1,2,3,4,5]"
+                  [class.rating-star--on]="(ratingHoverValue || ratingValue) >= s"
+                  (click)="setRating(s)"
+                  (mouseenter)="setRatingHover(s)"
+                  [attr.aria-label]="s + ' star' + (s === 1 ? '' : 's')">
+            <i class="bi bi-star-fill"></i>
+          </button>
+        </div>
+        <p class="rating-stars-hint" *ngIf="ratingValue === 0">Pick a rating from 1 to 5</p>
+        <p class="rating-stars-hint rating-stars-hint--picked" *ngIf="ratingValue > 0">
+          {{ ratingValue }} of 5 stars
+        </p>
+
+        <!-- Comment -->
+        <textarea class="rating-comment"
+                  [(ngModel)]="ratingComment"
+                  maxlength="500"
+                  rows="3"
+                  placeholder="What did you like? Anything to improve?"></textarea>
+
+        <!-- Error -->
+        <div class="rating-error" *ngIf="ratingError">{{ ratingError }}</div>
+
+        <!-- Actions -->
+        <div class="rating-actions">
+          <button type="button" class="rating-btn rating-btn--ghost"
+                  (click)="skipRating()" [disabled]="ratingSubmitting">
+            Maybe later
+          </button>
+          <button type="button" class="rating-btn rating-btn--primary"
+                  (click)="submitRating()" [disabled]="ratingSubmitting">
+            <i class="bi" [class.bi-send-fill]="!ratingSubmitting" [class.bi-arrow-clockwise]="ratingSubmitting"
+               [class.rating-spin]="ratingSubmitting"></i>
+            {{ ratingSubmitting ? 'Sending…' : 'Submit review' }}
+          </button>
+        </div>
+      </ng-template>
+
     </div>
   </div>
 
