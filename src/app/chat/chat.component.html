@@ -50,8 +50,38 @@
   <!-- ══ Main area ════════════════════════════════════════════ -->
   <div class="meet-main" [class.meet-main--local-pinned]="pinnedPeerId === 'local'">
 
+    <!-- Public-meeting name entry. Shown when ?public=1 without a `name`
+         URL param. The rest of the join flow (socket, peer, getUserMedia)
+         is deferred until the guest submits — no camera prompt happens
+         before we have a display name. -->
+    <div class="meet-prejoin" *ngIf="awaitingNameEntry">
+      <div class="meet-prejoin-card">
+        <div class="meet-prejoin-icon">
+          <i class="bi bi-people-fill"></i>
+        </div>
+        <h2 class="meet-prejoin-title">Join the meeting</h2>
+        <p class="meet-prejoin-sub">What should others call you?</p>
+        <input class="meet-prejoin-input"
+               type="text"
+               [(ngModel)]="guestNameInput"
+               (keydown)="onGuestNameKeydown($event)"
+               placeholder="Your name"
+               maxlength="40"
+               autofocus />
+        <button class="meet-prejoin-btn"
+                (click)="submitGuestName()"
+                [disabled]="guestNameInput.trim().length < 2">
+          <i class="bi bi-camera-video-fill"></i>
+          Join meeting
+        </button>
+        <p class="meet-prejoin-hint">
+          We'll ask for camera &amp; microphone access on the next step.
+        </p>
+      </div>
+    </div>
+
     <!-- Permission denied -->
-    <div class="meet-state" *ngIf="permissionError">
+    <div class="meet-state" *ngIf="permissionError && !awaitingNameEntry">
       <div class="meet-state-icon meet-state-icon--error">
         <i class="bi bi-camera-video-off-fill"></i>
       </div>
@@ -463,6 +493,39 @@
        Shown by leaveCall() once the local stream is torn down. The
        student can give 1–5 stars + a short comment, or skip.
        Optional `lesson_id` is sent so the review links back to this class. -->
+  <!-- Screen-share audio confirmation. Shown before invoking
+       getDisplayMedia so the user opts into capturing tab audio. The
+       OS-level "Share screen" dialog comes right after this. -->
+  <div class="screen-confirm-overlay" *ngIf="screenShareConfirmOpen">
+    <div class="screen-confirm">
+      <div class="screen-confirm-icon"><i class="bi bi-display"></i></div>
+      <h3 class="screen-confirm-title">Share your screen</h3>
+      <p class="screen-confirm-sub">
+        Do you want to share <strong>audio</strong> along with your screen?
+        <span class="screen-confirm-note">
+          Audio is only available when sharing a browser tab — tick
+          "Share tab audio" in the next dialog.
+        </span>
+      </p>
+      <div class="screen-confirm-actions">
+        <button class="screen-confirm-btn screen-confirm-btn--ghost"
+                (click)="cancelScreenShareConfirm()">
+          Cancel
+        </button>
+        <button class="screen-confirm-btn screen-confirm-btn--secondary"
+                (click)="startScreenShareWith(false)">
+          <i class="bi bi-display"></i>
+          Without audio
+        </button>
+        <button class="screen-confirm-btn screen-confirm-btn--primary"
+                (click)="startScreenShareWith(true)">
+          <i class="bi bi-volume-up-fill"></i>
+          With audio
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="rating-overlay" *ngIf="showRatingModal">
     <div class="rating-modal" role="dialog" aria-labelledby="rating-title">
 

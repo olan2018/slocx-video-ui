@@ -122,6 +122,15 @@ export class ChatComponent implements OnInit, OnDestroy {
   // own stream; any other value is a remote peerId.
   pinnedPeerId: string | null = null;
 
+  // ── Public meeting (name prompt) ──────────────────────────
+  // Set when the URL carries `?public=1` AND no `name` was passed.
+  // We pause the whole join flow on the name-entry screen until the
+  // guest types a display name; submitting calls `joinPublicMeeting()`,
+  // which finishes the deferred initialization with their chosen name.
+  isPublicMeeting: boolean = false;
+  awaitingNameEntry: boolean = false;
+  guestNameInput: string = '';
+
   // ── Post-call rating ───────────────────────────────────────
   // `reviewTicket` is the HMAC-signed capability token the slocx-frontend
   // mints when the student clicks "Join class". It encodes (user_id,
@@ -241,11 +250,13 @@ export class ChatComponent implements OnInit, OnDestroy {
     const photo = parsed['photo'] as string;
     const durationParam = parsed['duration'] as string;
     const roleParam = parsed['role'] as string;
+    const publicFlag = parsed['public'] as string;
 
     this.isTutor = roleParam === 'tutor';
     this.lessonId = room; // room param is the lesson ID
     // Optional capability token — see `reviewTicket` field comment.
     this.reviewTicket = (parsed['ticket'] as string) || '';
+    this.isPublicMeeting = publicFlag === '1';
 
     // Parse lesson duration
     const durationMins = parseInt(durationParam, 10);
@@ -254,9 +265,31 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
     this.timerRemainingSecs = this.lessonDurationSecs;
 
-    this.myUsername = username || 'Me';
+    // Public meetings: if no `name` came in on the URL, gate the entire
+    // join flow behind a name-entry screen. A random `user` id is still
+    // assigned so each browser is uniquely identifiable to the signaling
+    // server (otherwise duplicate-name collisions would kick the second
+    // joiner via the existing `sameName` event).
+    if (this.isPublicMeeting && !name) {
+      this.myUsername = username || this.generateGuestId();
+      this.awaitingNameEntry = true;
+      return; // wait for submitGuestName() to call performJoin()
+    }
+
+    this.myUsername = username || (this.isPublicMeeting ? this.generateGuestId() : 'Me');
     this.myDisplayName = name || this.myUsername;
     this.myAvatarUrl = photo || '';
+
+    this.performJoin();
+  }
+
+  /** Called when the guest submits the name-entry form on a public
+   *  meeting URL (or directly from ngOnInit for the regular flow). Owns
+   *  all the socket / peer / getUserMedia setup. */
+  private performJoin(): void {
+    const parsed = Qs.parse(location.search, { ignoreQueryPrefix: true });
+    const username = this.myUsername;
+    const room = parsed['room'] as string;
 
     this.socket = io(environment.socketUrl);
 
@@ -532,6 +565,33 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.socket.emit(this.handRaised ? 'raise-hand' : 'lower-hand');
   }
 
+  // ── Public-meeting guest name flow ──────────────────────
+  /** Random per-tab identifier used as the signaling `username` for
+   *  public-meeting guests. Avoids collisions when two anonymous guests
+   *  join with the same display name (the signaling server kicks the
+   *  second with `sameName` if usernames collide). */
+  private generateGuestId(): string {
+    return 'guest-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  }
+
+  /** Called from the name-entry screen. Validates the input, sets the
+   *  display name, and finally fires the deferred join. */
+  submitGuestName(): void {
+    const trimmed = this.guestNameInput.trim();
+    if (trimmed.length < 2) return;
+    this.myDisplayName = trimmed;
+    this.myAvatarUrl = '';
+    this.awaitingNameEntry = false;
+    this.performJoin();
+  }
+
+  onGuestNameKeydown(ev: KeyboardEvent): void {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      this.submitGuestName();
+    }
+  }
+
   // ── Spotlight / pin ──────────────────────────────────────
   //
   // Single source of truth: `this.pinnedPeerId`. Remote tiles are
@@ -648,20 +708,64 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** True while the "include tab audio?" confirmation modal is open. The
+   *  modal is shown before each share attempt because the choice is per
+   *  session — once shared, the user can't toggle audio without re-sharing. */
+  screenShareConfirmOpen: boolean = false;
+
   async toggleScreenShare(): Promise<void> {
     if (this.isScreenSharing) {
       await this.stopScreenShare();
-    } else {
-      await this.startScreenShare();
+      return;
     }
+    // Show the small "include audio?" prompt before invoking
+    // getDisplayMedia, since the OS-level share dialog comes right after
+    // and we want the choice baked into the request.
+    this.screenShareConfirmOpen = true;
   }
 
-  private async startScreenShare(): Promise<void> {
+  /** Called by the audio-confirmation modal. `includeAudio = true` swaps
+   *  the user's mic output for the captured tab audio so screen audio is
+   *  actually transmitted to peers; their mic is restored on stop. */
+  async startScreenShareWith(includeAudio: boolean): Promise<void> {
+    this.screenShareConfirmOpen = false;
+    await this.startScreenShare(includeAudio);
+  }
+
+  cancelScreenShareConfirm(): void {
+    this.screenShareConfirmOpen = false;
+  }
+
+  private async startScreenShare(includeAudio: boolean = false): Promise<void> {
     try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      // Note: browsers only return an audio track when the user picks a
+      // browser TAB and ticks "Share tab audio". Window/full-screen
+      // shares can't carry audio. We always request it when asked; the
+      // user is informed of the limitation in the confirm modal copy.
+      const constraints: MediaStreamConstraints = {
+        video: true,
+        audio: includeAudio,
+      };
+      const screenStream = await navigator.mediaDevices.getDisplayMedia(constraints);
       this.screenStream = screenStream;
       const screenTrack = screenStream.getVideoTracks()[0];
       this.replaceVideoTrackInPeers(screenTrack);
+
+      // If the user opted in AND the browser actually produced an audio
+      // track, swap each peer's outgoing audio sender to the screen audio.
+      // We stash the mic track so we can restore it on stop without
+      // re-requesting permissions.
+      const screenAudio = screenStream.getAudioTracks()[0];
+      if (includeAudio && screenAudio) {
+        this.replaceAudioTrackInPeers(screenAudio);
+        this.audioSourceIsScreen = true;
+        // When the user stops sharing via the browser's "Stop sharing"
+        // bar, the audio track ends independently — handle both.
+        screenAudio.addEventListener('ended', () => {
+          if (this.isScreenSharing) this.stopScreenShare();
+        });
+      }
+
       this.isScreenSharing = true;
       // Show the screen in the local PiP so the user sees what they're sharing
       // (and the unmirrored CSS rule for .screen-sharing finally applies to a
@@ -681,6 +785,11 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** True when the outgoing audio sender on each peer is currently
+   *  carrying screen audio rather than the user's mic. Used so stop can
+   *  restore the mic in one place. */
+  private audioSourceIsScreen: boolean = false;
+
   private async stopScreenShare(): Promise<void> {
     if (this.screenStream) {
       this.screenStream.getTracks().forEach((t) => t.stop());
@@ -689,6 +798,14 @@ export class ChatComponent implements OnInit, OnDestroy {
     const cameraTrack = this.localStream?.getVideoTracks()[0];
     if (cameraTrack) {
       this.replaceVideoTrackInPeers(cameraTrack);
+    }
+    // Restore mic audio if we'd swapped it for screen audio.
+    if (this.audioSourceIsScreen) {
+      const micTrack = this.localStream?.getAudioTracks()[0];
+      if (micTrack) {
+        this.replaceAudioTrackInPeers(micTrack);
+      }
+      this.audioSourceIsScreen = false;
     }
     // Restore the camera stream in the local PiP
     if (this.localVideoEl?.nativeElement && this.localStream) {
@@ -707,6 +824,21 @@ export class ChatComponent implements OnInit, OnDestroy {
       if (sender) {
         sender.replaceTrack(newTrack).catch((err) =>
           console.error('[SCREEN] replaceTrack error:', err)
+        );
+      }
+    });
+  }
+
+  /** Same pattern as `replaceVideoTrackInPeers` but for the audio sender —
+   *  used to swap mic ↔ tab audio when screen-sharing with audio. */
+  private replaceAudioTrackInPeers(newTrack: MediaStreamTrack): void {
+    Object.values(this.peers).forEach((call) => {
+      const pc: RTCPeerConnection = (call as any).peerConnection;
+      if (!pc) return;
+      const sender = pc.getSenders().find((s) => s.track?.kind === 'audio');
+      if (sender) {
+        sender.replaceTrack(newTrack).catch((err) =>
+          console.error('[SCREEN] audio replaceTrack error:', err)
         );
       }
     });

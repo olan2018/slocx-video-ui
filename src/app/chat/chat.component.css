@@ -1737,3 +1737,183 @@
   min-width: 200px;
   max-width: 200px;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Public meeting pre-join (name entry)
+   Shown when ?public=1 and no name was supplied. Sits on the main
+   area in place of the video grid; the full join flow (socket,
+   peer, getUserMedia) is paused until the user submits.
+   ══════════════════════════════════════════════════════════════ */
+.meet-prejoin {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-primary);
+  z-index: 6;
+}
+.meet-prejoin-card {
+  width: min(440px, 100%);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 28px 26px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  animation: rating-pop 220ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+.meet-prejoin-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(77, 163, 255, 0.15);
+  color: var(--accent);
+  font-size: 24px;
+}
+.meet-prejoin-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+.meet-prejoin-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 18px;
+}
+.meet-prejoin-input {
+  width: 100%;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 15px;
+  color: var(--text-primary);
+  outline: none;
+  text-align: center;
+  transition: border-color 120ms ease, background 120ms ease;
+  margin-bottom: 14px;
+}
+.meet-prejoin-input:focus {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+.meet-prejoin-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--accent);
+  color: white;
+  border: 0;
+  border-radius: 999px;
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+.meet-prejoin-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.meet-prejoin-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.meet-prejoin-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 12px 0 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Screen-share audio confirmation
+   Lives on top of the meeting briefly while the user picks audio
+   mode. Visually consistent with the rating modal.
+   ══════════════════════════════════════════════════════════════ */
+.screen-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(8, 16, 32, 0.66);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: rating-fade 200ms ease-out;
+}
+.screen-confirm {
+  width: min(440px, 100%);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 24px 22px 18px;
+  color: var(--text-primary);
+  text-align: center;
+  animation: rating-pop 220ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+.screen-confirm-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  margin: 0 auto 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(77, 163, 255, 0.15);
+  color: var(--accent);
+  font-size: 22px;
+}
+.screen-confirm-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+.screen-confirm-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 16px;
+}
+.screen-confirm-note {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  opacity: 0.75;
+}
+.screen-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.screen-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, opacity 120ms ease;
+}
+.screen-confirm-btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.screen-confirm-btn--ghost:hover { background: var(--bg-surface); color: var(--text-primary); }
+.screen-confirm-btn--secondary {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+.screen-confirm-btn--secondary:hover { background: var(--bg-hover); }
+.screen-confirm-btn--primary {
+  background: var(--accent);
+  color: #fff;
+}
+.screen-confirm-btn--primary:hover { background: var(--accent-hover); }
