@@ -1,0 +1,208 @@
+/* Landing page for meet.slocx.com root.
+   Shown only when no `?room=` is in the URL — otherwise the meeting
+   component takes over. Self-contained styles so the existing Meet
+   theme variables don't have to be loaded for this page. */
+
+.landing {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(77, 163, 255, 0.18), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(125, 211, 252, 0.10), transparent 55%),
+    linear-gradient(180deg, #0a1830 0%, #0d1f3c 100%);
+  color: #e8f0fe;
+  font-family: 'Google Sans', 'Roboto', system-ui, sans-serif;
+}
+
+/* ── Top bar ─────────────────────────────────────────────── */
+.landing-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 28px;
+}
+.landing-brand { display: flex; align-items: center; gap: 10px; }
+.landing-logo { width: 32px; height: 32px; object-fit: contain; }
+.landing-brand-name {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  background: linear-gradient(90deg, #4da3ff, #7ec8ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.landing-top-link {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 120ms ease;
+}
+.landing-top-link:hover { color: #fff; }
+
+/* ── Hero ────────────────────────────────────────────────── */
+.landing-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 56px 24px 48px;
+  max-width: 880px;
+  margin: 0 auto;
+  width: 100%;
+}
+.landing-title {
+  font-size: clamp(34px, 6vw, 56px);
+  line-height: 1.08;
+  font-weight: 800;
+  margin: 0 0 14px;
+  letter-spacing: -0.5px;
+}
+.landing-accent {
+  background: linear-gradient(90deg, #4da3ff, #7ec8ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.landing-sub {
+  font-size: 16px;
+  line-height: 1.55;
+  color: rgba(232, 240, 254, 0.75);
+  margin: 0 0 26px;
+  max-width: 620px;
+}
+
+/* Join input */
+.landing-join {
+  display: flex;
+  width: 100%;
+  max-width: 520px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.landing-join:focus-within {
+  border-color: #4da3ff;
+  background: rgba(255, 255, 255, 0.10);
+}
+.landing-join-input {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: none;
+  padding: 13px 16px;
+  color: #fff;
+  font-size: 14px;
+}
+.landing-join-input::placeholder { color: rgba(232, 240, 254, 0.45); }
+.landing-join-btn {
+  background: #4da3ff;
+  color: #fff;
+  border: 0;
+  padding: 0 22px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.landing-join-btn:hover { background: #2e8fef; }
+.landing-join-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #ff9b9b;
+}
+
+/* CTA row */
+.landing-cta-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+}
+.landing-cta {
+  border-radius: 999px;
+  padding: 11px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.landing-cta--primary {
+  background: #fff;
+  color: #0d1f3c;
+  border: 0;
+}
+.landing-cta--primary:hover { background: #f1f3f4; transform: translateY(-1px); }
+.landing-cta--ghost {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.landing-cta--ghost:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+
+/* ── Features ────────────────────────────────────────────── */
+.landing-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  padding: 0 28px 36px;
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+}
+.landing-feature {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 22px 20px;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+.landing-feature:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-2px);
+}
+.landing-feature-icon { font-size: 24px; margin-bottom: 8px; }
+.landing-feature-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 6px;
+}
+.landing-feature-sub {
+  font-size: 13px;
+  color: rgba(232, 240, 254, 0.7);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Footer ──────────────────────────────────────────────── */
+.landing-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(232, 240, 254, 0.5);
+  font-size: 12px;
+}
+.landing-footer p { margin: 0; }
+.landing-footer a {
+  color: rgba(232, 240, 254, 0.75);
+  text-decoration: none;
+}
+.landing-footer a:hover { color: #fff; }
+
+@media (max-width: 540px) {
+  .landing-top { padding: 14px 18px; }
+  .landing-hero { padding: 36px 18px 28px; }
+  .landing-features { padding: 0 18px 28px; }
+  .landing-footer { padding: 16px 18px; flex-direction: column; gap: 6px; }
+}

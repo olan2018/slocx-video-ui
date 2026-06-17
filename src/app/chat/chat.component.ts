@@ -93,6 +93,10 @@ export class ChatComponent implements OnInit, OnDestroy {
   handRaised: boolean = false;
   raisedHands: Set<string> = new Set();
 
+  // Tracks peerIds whose camera is currently OFF. Used to overlay an
+  // initials avatar on top of the (otherwise black) remote video tile.
+  cameraOffPeers: Set<string> = new Set();
+
   // Emoji reactions
   reactionsOpen: boolean = false;
   floatingReactions: { emoji: string; name: string; id: number }[] = [];
@@ -121,6 +125,18 @@ export class ChatComponent implements OnInit, OnDestroy {
   // own view independently. `'local'` is the sentinel for the local user's
   // own stream; any other value is a remote peerId.
   pinnedPeerId: string | null = null;
+
+  // ── Meeting brand kind ────────────────────────────────────
+  // `'classroom'` (default) shows the original Classroom sub-label;
+  // `'meeting'` shows a more official "Meet" sub-label and a slightly
+  // different accent. Resolved from `?kind=` on the URL OR fetched via
+  // GET /v1/meeting-links/:id/kind for public meeting links that
+  // didn't bake the kind into the URL.
+  meetingKind: 'classroom' | 'meeting' = 'classroom';
+
+  get meetingKindLabel(): string {
+    return this.meetingKind === 'meeting' ? 'Meet' : 'Classroom';
+  }
 
   // ── Public meeting (name prompt) ──────────────────────────
   // Set when the URL carries `?public=1` AND no `name` was passed.
@@ -258,6 +274,24 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.reviewTicket = (parsed['ticket'] as string) || '';
     this.isPublicMeeting = publicFlag === '1';
 
+    // Brand kind: URL wins if explicit, otherwise default to classroom
+    // and fire a background fetch for public meeting links so the chrome
+    // updates as soon as the backend responds.
+    const kindParam = (parsed['kind'] as string || '').toLowerCase();
+    if (kindParam === 'meeting' || kindParam === 'classroom') {
+      this.meetingKind = kindParam as 'classroom' | 'meeting';
+    } else if (this.isPublicMeeting && room) {
+      fetch(`${environment.apiUrl}/v1/meeting-links/${room}/kind`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((body: any) => {
+          const k = body?.data?.kind;
+          if (k === 'meeting' || k === 'classroom') {
+            this.meetingKind = k;
+          }
+        })
+        .catch(() => {});
+    }
+
     // Parse lesson duration
     const durationMins = parseInt(durationParam, 10);
     if (!isNaN(durationMins) && durationMins > 0) {
@@ -346,6 +380,18 @@ export class ChatComponent implements OnInit, OnDestroy {
     });
     this.socket.on('user-stopped-screen-share', (peerId: string) => {
       document.getElementById('tile-' + peerId)?.classList.remove('screen-sharing');
+    });
+
+    // Camera state from a remote — show / hide the initials avatar
+    // overlay on their tile. Mirrors the same DOM-imperative pattern
+    // the hand-raise badge uses, since tiles are created outside Angular.
+    this.socket.on('user-camera-state', (data: { peerId: string; on: boolean }) => {
+      if (data.on) {
+        this.cameraOffPeers.delete(data.peerId);
+      } else {
+        this.cameraOffPeers.add(data.peerId);
+      }
+      this.applyCameraOffOverlay(data.peerId, !data.on);
     });
 
     this.socket.on('user-disconnected', (userId: string) => {
@@ -558,6 +604,11 @@ export class ChatComponent implements OnInit, OnDestroy {
         track.enabled = this.isCameraOn;
       });
     }
+    // Tell remote peers so their tiles for us can swap to the initials
+    // avatar instead of showing a frozen / black frame.
+    if (this.socket) {
+      this.socket.emit('camera-state', this.isCameraOn);
+    }
   }
 
   toggleHand(): void {
@@ -752,13 +803,23 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.replaceVideoTrackInPeers(screenTrack);
 
       // If the user opted in AND the browser actually produced an audio
-      // track, swap each peer's outgoing audio sender to the screen audio.
-      // We stash the mic track so we can restore it on stop without
-      // re-requesting permissions.
+      // track, MIX it with the mic into a single composite track and
+      // send that to peers. Naively `replaceTrack`-ing the audio sender
+      // with the tab audio (the old behavior) made the sharer go silent
+      // because their mic was no longer being transmitted.
+      //
+      // Web Audio API: connect both MediaStreamSources into a single
+      // MediaStreamDestination; the destination's stream has a mixed
+      // audio track we send instead of the mic. On stop, we restore the
+      // mic and tear down the AudioContext.
       const screenAudio = screenStream.getAudioTracks()[0];
       if (includeAudio && screenAudio) {
-        this.replaceAudioTrackInPeers(screenAudio);
-        this.audioSourceIsScreen = true;
+        const mixedTrack = this.buildMixedAudioTrack(this.localStream, screenStream);
+        if (mixedTrack) {
+          this.replaceAudioTrackInPeers(mixedTrack);
+          this.mixedAudioTrack = mixedTrack;
+          this.audioSourceIsScreen = true;
+        }
         // When the user stops sharing via the browser's "Stop sharing"
         // bar, the audio track ends independently — handle both.
         screenAudio.addEventListener('ended', () => {
@@ -786,9 +847,53 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   /** True when the outgoing audio sender on each peer is currently
-   *  carrying screen audio rather than the user's mic. Used so stop can
-   *  restore the mic in one place. */
+   *  carrying mixed (mic + tab) audio rather than the bare mic track.
+   *  Used so stop can restore the mic in one place. */
   private audioSourceIsScreen: boolean = false;
+
+  /** AudioContext used to mix mic + tab audio during a screen share.
+   *  Held so we can `close()` it on stop and free the audio thread. */
+  private screenAudioCtx: AudioContext | null = null;
+
+  /** Reference to the mixed MediaStreamTrack so stop() can stop() it
+   *  explicitly (the underlying graph stays alive until then). */
+  private mixedAudioTrack: MediaStreamTrack | null = null;
+
+  /** Build a single audio MediaStreamTrack that carries BOTH the mic
+   *  and the captured tab audio. Returns null if either source is
+   *  missing — caller falls back gracefully. */
+  private buildMixedAudioTrack(
+    mic: MediaStream | null,
+    tab: MediaStream,
+  ): MediaStreamTrack | null {
+    const tabAudio = tab.getAudioTracks()[0];
+    if (!tabAudio) return null;
+
+    try {
+      const AC: typeof AudioContext =
+        (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AC();
+      const dest = ctx.createMediaStreamDestination();
+
+      // Tab audio is always in the mix.
+      const tabSource = ctx.createMediaStreamSource(new MediaStream([tabAudio]));
+      tabSource.connect(dest);
+
+      // Mic optional — if mic stream has no audio track (rare, but
+      // possible if the user denied mic at startup), we ship tab-only.
+      const micAudio = mic?.getAudioTracks()[0];
+      if (micAudio) {
+        const micSource = ctx.createMediaStreamSource(new MediaStream([micAudio]));
+        micSource.connect(dest);
+      }
+
+      this.screenAudioCtx = ctx;
+      return dest.stream.getAudioTracks()[0] || null;
+    } catch (err) {
+      console.error('[SCREEN] audio mix failed:', err);
+      return null;
+    }
+  }
 
   private async stopScreenShare(): Promise<void> {
     if (this.screenStream) {
@@ -799,11 +904,20 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (cameraTrack) {
       this.replaceVideoTrackInPeers(cameraTrack);
     }
-    // Restore mic audio if we'd swapped it for screen audio.
+    // Restore bare mic audio if we'd swapped it for the mic+tab mix,
+    // then tear down the audio mixer graph so we don't leak nodes.
     if (this.audioSourceIsScreen) {
       const micTrack = this.localStream?.getAudioTracks()[0];
       if (micTrack) {
         this.replaceAudioTrackInPeers(micTrack);
+      }
+      if (this.mixedAudioTrack) {
+        this.mixedAudioTrack.stop();
+        this.mixedAudioTrack = null;
+      }
+      if (this.screenAudioCtx) {
+        this.screenAudioCtx.close().catch(() => {});
+        this.screenAudioCtx = null;
       }
       this.audioSourceIsScreen = false;
     }
@@ -1199,6 +1313,11 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (this.raisedHands.has(userId)) {
       this.showHandIndicator(userId, true);
     }
+    // If their camera was already off when we joined, render the overlay
+    // immediately — otherwise the tile would briefly show a black frame.
+    if (this.cameraOffPeers.has(userId)) {
+      this.applyCameraOffOverlay(userId, true);
+    }
 
     this.remoteVideos.push(video);
     video.addEventListener('loadedmetadata', () => {
@@ -1262,6 +1381,42 @@ export class ChatComponent implements OnInit, OnDestroy {
     } else {
       badge?.remove();
     }
+  }
+
+  /** Render / remove the initials overlay on a remote tile when their
+   *  camera goes off / on. Uses the cached profile (set on user-connected)
+   *  to derive the initials; falls back to "?" if unknown. */
+  private applyCameraOffOverlay(peerId: string, off: boolean): void {
+    const tile = document.getElementById('tile-' + peerId);
+    if (!tile) return;
+    let overlay = tile.querySelector('.tile-cam-off') as HTMLElement | null;
+    if (off) {
+      if (!overlay) {
+        const profile = this.peerProfiles.get(peerId);
+        const name = profile?.name || peerId;
+        overlay = document.createElement('div');
+        overlay.className = 'tile-cam-off';
+        const circle = document.createElement('div');
+        circle.className = 'tile-cam-off-initials';
+        circle.textContent = this.getInitials(name);
+        const label = document.createElement('div');
+        label.className = 'tile-cam-off-name';
+        label.textContent = name;
+        overlay.append(circle, label);
+        tile.appendChild(overlay);
+      }
+    } else {
+      overlay?.remove();
+    }
+  }
+
+  /** Compute up to two uppercase initials from a display name. */
+  getInitials(name: string): string {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
 
   private scrollChatToBottom(): void {

@@ -1,4 +1,6 @@
-<div class="meet-root" [attr.data-theme]="isDarkMode ? 'dark' : 'light'">
+<div class="meet-root"
+     [attr.data-theme]="isDarkMode ? 'dark' : 'light'"
+     [attr.data-kind]="meetingKind">
 
   <!-- ══ Top bar ══════════════════════════════════════════════ -->
   <div class="meet-topbar">
@@ -9,7 +11,7 @@
       </div>
       <div class="meet-brand-stack">
         <span class="meet-brand-name">Slocx</span>
-        <span class="meet-brand-sub">Classroom</span>
+        <span class="meet-brand-sub">{{ meetingKindLabel }}</span>
       </div>
       <div class="meet-topbar-divider"></div>
     </div>
@@ -94,7 +96,7 @@
       <div class="meet-state-icon meet-state-icon--error">
         <i class="bi bi-wifi-off"></i>
       </div>
-      <p class="meet-state-title">Unable to join classroom</p>
+      <p class="meet-state-title">Unable to join {{ meetingKind === 'meeting' ? 'meeting' : 'classroom' }}</p>
       <p class="meet-state-sub">{{ connectionErrorMsg }}</p>
     </div>
 
@@ -115,6 +117,13 @@
     <div class="meet-video-tile meet-video-tile--pinned meet-video-tile--local"
          *ngIf="pinnedPeerId === 'local'">
       <video #localSpotlightVideo autoplay muted playsinline></video>
+      <!-- Initials overlay shown when own camera is off — same idea as
+           the remote `.tile-cam-off`, just rendered via Angular here
+           because the local spotlight tile is in the template. -->
+      <div class="tile-cam-off" *ngIf="!isCameraOn">
+        <div class="tile-cam-off-initials">{{ getInitials(myDisplayName) }}</div>
+        <div class="tile-cam-off-name">{{ myDisplayName }}</div>
+      </div>
       <button class="meet-video-tile-pin meet-video-tile-pin--active"
               (click)="unpin()" title="Unpin">
         <i class="bi bi-pin-angle-fill"></i>
@@ -155,6 +164,11 @@
          (click)="togglePinLocal()"
          title="Click to spotlight yourself">
       <video #localVideo autoplay muted playsinline></video>
+      <!-- Tiny initials avatar inside the PiP when own camera is off, so
+           the corner isn't a black square. -->
+      <div class="meet-pip-cam-off" *ngIf="!isCameraOn">
+        <div class="meet-pip-cam-off-initials">{{ getInitials(myDisplayName) }}</div>
+      </div>
       <div class="meet-pip-overlay">
         <span class="meet-name-tag">You</span>
         <div class="meet-pip-badges">
@@ -534,7 +548,7 @@
         <div class="rating-thanks">
           <div class="rating-thanks-icon"><i class="bi bi-check-circle-fill"></i></div>
           <h3 class="rating-title">Thanks for your review!</h3>
-          <p class="rating-sub">Closing the classroom…</p>
+          <p class="rating-sub">Closing the {{ meetingKind === 'meeting' ? 'meeting' : 'classroom' }}…</p>
         </div>
       </ng-container>
 

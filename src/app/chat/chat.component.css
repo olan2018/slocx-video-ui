@@ -1917,3 +1917,94 @@
   color: #fff;
 }
 .screen-confirm-btn--primary:hover { background: var(--accent-hover); }
+
+/* ══════════════════════════════════════════════════════════════
+   Camera-off avatar overlay
+   Rendered when a participant turns off their camera so the tile
+   never shows a void. Same look used for remote tiles (imperatively
+   injected) and the local PiP / spotlight tile (Angular-rendered).
+   ══════════════════════════════════════════════════════════════ */
+:host ::ng-deep .tile-cam-off {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #0f2748 0%, #1a3259 100%);
+  color: #fff;
+  z-index: 2;
+  pointer-events: none;
+}
+:host ::ng-deep .tile-cam-off-initials {
+  width: clamp(56px, 22%, 110px);
+  height: clamp(56px, 22%, 110px);
+  border-radius: 50%;
+  background: rgba(77, 163, 255, 0.22);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(22px, 7vw, 42px);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  user-select: none;
+}
+:host ::ng-deep .tile-cam-off-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* PiP variant — smaller, no name label (the PiP already has its own). */
+.meet-pip-cam-off {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f2748 0%, #1a3259 100%);
+  z-index: 2;
+  pointer-events: none;
+}
+.meet-pip-cam-off-initials {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(77, 163, 255, 0.25);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Meeting kind theming
+   `data-kind="meeting"` shifts the brand gradient to a more
+   neutral / official tone (slate-on-grey) versus the lesson blue
+   used by the default classroom layout. Nothing else changes —
+   the rest of the chrome stays consistent across kinds.
+   ══════════════════════════════════════════════════════════════ */
+.meet-root[data-kind="meeting"] .meet-brand-name {
+  background: linear-gradient(90deg, #cbd5e1, #94a3b8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.meet-root[data-kind="meeting"][data-theme="light"] .meet-brand-name {
+  background: linear-gradient(90deg, #334155, #64748b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

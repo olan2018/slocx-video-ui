@@ -1,0 +1,82 @@
+<div class="landing">
+
+  <!-- Top bar — logo only, plus a "Visit Slocx" link for users who
+       landed here directly rather than via a meeting link. -->
+  <header class="landing-top">
+    <div class="landing-brand">
+      <img src="../../assets/slocx.png" alt="Slocx" class="landing-logo" />
+      <span class="landing-brand-name">Slocx Meet</span>
+    </div>
+    <a class="landing-top-link" [href]="slocxUrl">Visit slocx.com →</a>
+  </header>
+
+  <!-- Hero. Headline + sub + the two primary CTAs. The "Join a meeting"
+       field is the pragmatic path for users who arrived because someone
+       shared a meeting URL with them. -->
+  <section class="landing-hero">
+    <h1 class="landing-title">
+      Video calls for the
+      <span class="landing-accent">Slocx</span>
+      community.
+    </h1>
+    <p class="landing-sub">
+      Lessons, group classes, and team meetings — without the friction.
+      Just open the link your tutor or admin shared with you.
+    </p>
+
+    <div class="landing-join">
+      <input class="landing-join-input"
+             [(ngModel)]="joinInput"
+             (keydown)="onJoinKeydown($event)"
+             placeholder="Paste meeting link or ID"
+             autocomplete="off" />
+      <button class="landing-join-btn" (click)="joinFromInput()">
+        Join meeting
+      </button>
+    </div>
+    <p class="landing-join-error" *ngIf="joinError">{{ joinError }}</p>
+
+    <div class="landing-cta-row">
+      <button class="landing-cta landing-cta--primary" (click)="goToSlocx()">
+        Explore Slocx
+      </button>
+      <a class="landing-cta landing-cta--ghost" [href]="slocxUrl + '/become-a-tutor'">
+        Become a tutor
+      </a>
+    </div>
+  </section>
+
+  <!-- Feature strip — just three quick value-prop boxes. Keeps the
+       page light without diving into a full marketing layout. -->
+  <section class="landing-features">
+    <div class="landing-feature">
+      <div class="landing-feature-icon">💬</div>
+      <h3 class="landing-feature-title">Live lessons</h3>
+      <p class="landing-feature-sub">
+        Book one-on-one or group classes with native-speaker tutors and
+        join straight from your browser.
+      </p>
+    </div>
+    <div class="landing-feature">
+      <div class="landing-feature-icon">🎓</div>
+      <h3 class="landing-feature-title">Built for learning</h3>
+      <p class="landing-feature-sub">
+        In-call live quizzes, raise-hand, shared materials, and a chat
+        sidebar — designed for the classroom, not retrofitted into one.
+      </p>
+    </div>
+    <div class="landing-feature">
+      <div class="landing-feature-icon">🤝</div>
+      <h3 class="landing-feature-title">Team meetings too</h3>
+      <p class="landing-feature-sub">
+        Admins can spin up open-join meeting links in seconds. Share the
+        URL, attendees type their name, they're in.
+      </p>
+    </div>
+  </section>
+
+  <footer class="landing-footer">
+    <p>© {{ year }} Slocx — language learning that travels with you.</p>
+    <a [href]="slocxUrl">slocx.com</a>
+  </footer>
+</div>

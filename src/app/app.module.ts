@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { ChatComponent } from './chat/chat.component';
+import { LandingComponent } from './landing/landing.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { MatGridListModule } from '@angular/material/grid-list';
 import { MatSidenavModule } from '@angular/material/sidenav';
@@ -19,7 +20,7 @@ const config: SocketIoConfig = { url: 'http://localhost:4000', options: {} };
 
 
 @NgModule({
-  declarations: [AppComponent, ChatComponent],
+  declarations: [AppComponent, ChatComponent, LandingComponent],
   imports: [
     BrowserModule,
     FormsModule,

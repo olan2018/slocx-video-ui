@@ -1,1 +1,2 @@
-<app-chat></app-chat>
+<app-chat *ngIf="inMeeting"></app-chat>
+<app-landing *ngIf="!inMeeting"></app-landing>
