@@ -2008,3 +2008,139 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Permission gate
+   Shown when getUserMedia rejects. Custom prompter for camera +
+   mic — the browser's own popup can't be skinned, but everything
+   around it is ours. Mirrors the pre-join card for consistency.
+   ══════════════════════════════════════════════════════════════ */
+.perm-gate {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg-primary);
+  z-index: 7;
+}
+
+.perm-gate__card {
+  width: min(520px, 100%);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 32px 30px 26px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  animation: rating-pop 240ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+.perm-gate__icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(234, 67, 53, 0.15);
+  color: var(--danger);
+  font-size: 32px;
+  animation: rating-pop 320ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+.perm-gate__icon--device {
+  background: rgba(77, 163, 255, 0.16);
+  color: var(--accent);
+}
+.perm-gate__icon--inuse {
+  background: rgba(249, 171, 0, 0.18);
+  color: var(--hand-color);
+}
+
+.perm-gate__title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--text-primary);
+}
+.perm-gate__sub {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0 0 22px;
+}
+.perm-gate__sub strong { color: var(--text-primary); }
+
+.perm-gate__retry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 999px;
+  padding: 11px 26px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, opacity 120ms ease, transform 120ms ease;
+}
+.perm-gate__retry:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+.perm-gate__retry:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.perm-gate__retry .bi-three-dots {
+  animation: rating-rotate 800ms linear infinite;
+}
+
+.perm-gate__steps {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  text-align: left;
+}
+.perm-gate__steps-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin: 0 0 10px;
+}
+.perm-gate__steps-list {
+  margin: 0;
+  padding-left: 24px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+.perm-gate__steps-list li {
+  margin-bottom: 4px;
+}
+.perm-gate__steps-list strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Audio-only state ─────────────────────────────────────
+   The camera button is disabled when the user joined without a
+   webcam (NotFoundError fallback). Visual cue keeps it readable
+   as "this isn't actionable" rather than "off / will turn on". */
+.meet-ctrl-btn:disabled,
+.meet-ctrl-btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: var(--bg-surface);
+}
+.meet-ctrl-btn:disabled:hover,
+.meet-ctrl-btn[disabled]:hover {
+  background: var(--bg-surface);
+  transform: none;
+}

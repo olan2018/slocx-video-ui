@@ -82,13 +82,120 @@
       </div>
     </div>
 
-    <!-- Permission denied -->
-    <div class="meet-state" *ngIf="permissionError && !awaitingNameEntry">
-      <div class="meet-state-icon meet-state-icon--error">
-        <i class="bi bi-camera-video-off-fill"></i>
+    <!-- Permission gate. Shown when getUserMedia fails. We can't replace
+         the browser's own permission popup (security), but everything
+         around it is ours: a retry button that re-fires the prompt, copy
+         that adapts to the failure cause (denied vs no device vs in use),
+         and browser-specific steps for the "permanently blocked" case. -->
+    <div class="perm-gate" *ngIf="permissionError && !awaitingNameEntry">
+      <div class="perm-gate__card">
+
+        <!-- Icon mirrors the failure cause. -->
+        <div class="perm-gate__icon"
+             [class.perm-gate__icon--device]="permissionStatus === 'no-device'"
+             [class.perm-gate__icon--inuse]="permissionStatus === 'in-use'">
+          <i class="bi"
+             [class.bi-camera-video-off-fill]="permissionStatus === 'denied' || permissionStatus === 'unknown'"
+             [class.bi-headset]="permissionStatus === 'no-device'"
+             [class.bi-exclamation-triangle-fill]="permissionStatus === 'in-use'"></i>
+        </div>
+
+        <!-- Headline + sub-copy switches per failure cause. -->
+        <ng-container [ngSwitch]="permissionStatus">
+          <ng-container *ngSwitchCase="'denied'">
+            <h2 class="perm-gate__title">Camera &amp; mic access needed</h2>
+            <p class="perm-gate__sub">
+              We need access to your camera and microphone so others on the
+              call can see and hear you. Click <strong>Try again</strong>
+              below — your browser will ask for permission.
+            </p>
+          </ng-container>
+          <ng-container *ngSwitchCase="'no-device'">
+            <h2 class="perm-gate__title">No camera or microphone found</h2>
+            <p class="perm-gate__sub">
+              Your device doesn't appear to have a camera or microphone
+              connected. Plug one in and click <strong>Try again</strong>.
+            </p>
+          </ng-container>
+          <ng-container *ngSwitchCase="'in-use'">
+            <h2 class="perm-gate__title">Camera or mic is in use</h2>
+            <p class="perm-gate__sub">
+              Another app (Zoom, Meet, OBS…) is using your camera or
+              microphone. Close it and click <strong>Try again</strong>.
+            </p>
+          </ng-container>
+          <ng-container *ngSwitchDefault>
+            <h2 class="perm-gate__title">Couldn't access camera or mic</h2>
+            <p class="perm-gate__sub">
+              Something went wrong getting your camera and microphone.
+              Click <strong>Try again</strong> to retry, or refresh the page.
+            </p>
+          </ng-container>
+        </ng-container>
+
+        <!-- Primary action: re-fire getUserMedia. If they only dismissed
+             the prompt once, this re-prompts. If they permanently blocked,
+             this rejects instantly and the gate stays — they need to use
+             the steps below. -->
+        <button class="perm-gate__retry"
+                (click)="requestMedia()"
+                [disabled]="permissionRequesting">
+          <i class="bi" [class.bi-arrow-clockwise]="!permissionRequesting"
+                       [class.bi-three-dots]="permissionRequesting"></i>
+          {{ permissionRequesting ? 'Asking…' : 'Try again' }}
+        </button>
+
+        <!-- Browser-specific unblock steps. Only useful for the 'denied'
+             case (other failures aren't fixable via browser permissions). -->
+        <div class="perm-gate__steps" *ngIf="permissionStatus === 'denied'">
+          <p class="perm-gate__steps-label">
+            If the prompt doesn't appear, you may have blocked access earlier:
+          </p>
+
+          <ol class="perm-gate__steps-list"
+              [ngSwitch]="permissionBrowser">
+
+            <ng-container *ngSwitchCase="'chrome'">
+              <li>Click the <strong>🔒 lock icon</strong> next to the URL above</li>
+              <li>Set <strong>Camera</strong> and <strong>Microphone</strong> to <strong>Allow</strong></li>
+              <li>Click <strong>Try again</strong>, or reload the page</li>
+            </ng-container>
+
+            <ng-container *ngSwitchCase="'edge'">
+              <li>Click the <strong>🔒 lock icon</strong> next to the URL above</li>
+              <li>Pick <strong>Permissions for this site</strong></li>
+              <li>Switch <strong>Camera</strong> and <strong>Microphone</strong> to <strong>Allow</strong></li>
+              <li>Click <strong>Try again</strong>, or reload the page</li>
+            </ng-container>
+
+            <ng-container *ngSwitchCase="'firefox'">
+              <li>Click the <strong>🔒 lock icon</strong> next to the URL above</li>
+              <li>Find <strong>Use the Camera</strong> and <strong>Use the Microphone</strong> — remove the "Blocked" status</li>
+              <li>Reload the page and click <strong>Try again</strong></li>
+            </ng-container>
+
+            <ng-container *ngSwitchCase="'safari'">
+              <li>Open <strong>Safari → Settings → Websites</strong></li>
+              <li>Choose <strong>Camera</strong> (then <strong>Microphone</strong>) on the left</li>
+              <li>Find this site and switch it to <strong>Allow</strong></li>
+              <li>Reload the page and click <strong>Try again</strong></li>
+            </ng-container>
+
+            <ng-container *ngSwitchCase="'opera'">
+              <li>Click the <strong>🔒 lock icon</strong> next to the URL above</li>
+              <li>Allow <strong>Camera</strong> and <strong>Microphone</strong></li>
+              <li>Click <strong>Try again</strong>, or reload the page</li>
+            </ng-container>
+
+            <ng-container *ngSwitchDefault>
+              <li>Open your browser's site permissions for this page</li>
+              <li>Allow <strong>Camera</strong> and <strong>Microphone</strong></li>
+              <li>Click <strong>Try again</strong>, or reload the page</li>
+            </ng-container>
+          </ol>
+        </div>
+
       </div>
-      <p class="meet-state-title">Camera or microphone access denied</p>
-      <p class="meet-state-sub">Please allow camera and microphone access in your browser settings, then refresh the page.</p>
     </div>
 
     <!-- Connection / room error -->
@@ -387,9 +494,15 @@
         <span class="meet-ctrl-label">{{ isMuted ? 'Unmute' : 'Mute' }}</span>
       </button>
 
-      <!-- Camera -->
-      <button class="meet-ctrl-btn" [class.meet-ctrl-off]="!isCameraOn" (click)="toggleCamera()"
-        [title]="isCameraOn ? 'Turn off camera' : 'Turn on camera'">
+      <!-- Camera. Disabled when we joined audio-only because there's
+           no video track to flip; tooltip explains why. -->
+      <button class="meet-ctrl-btn"
+              [class.meet-ctrl-off]="!isCameraOn"
+              [disabled]="audioOnlyMode"
+              (click)="toggleCamera()"
+              [title]="audioOnlyMode
+                ? 'No camera detected — you joined audio-only'
+                : (isCameraOn ? 'Turn off camera' : 'Turn on camera')">
         <i class="bi" [class.bi-camera-video-fill]="isCameraOn" [class.bi-camera-video-off-fill]="!isCameraOn"></i>
         <span class="meet-ctrl-label">{{ isCameraOn ? 'Stop video' : 'Start video' }}</span>
       </button>

@@ -75,6 +75,38 @@ export class ChatComponent implements OnInit, OnDestroy {
   isMuted: boolean = false;
   isCameraOn: boolean = true;
   permissionError: boolean = false;
+
+  // ── Permission gate (custom prompter) ────────────────────
+  // The browser's own permission popup can't be skinned — that's a hard
+  // security boundary. What we DO control is everything around it:
+  //   - a friendly retry button that re-fires getUserMedia (works when
+  //     the user dismissed once but hasn't permanently blocked)
+  //   - browser-specific copy that walks them to the lock icon in the
+  //     address bar when they HAVE permanently blocked
+  //   - distinguish "no device" / "device in use" / "denied" so the
+  //     copy matches the actual failure cause.
+  permissionStatus: 'idle' | 'requesting' | 'granted' | 'denied' | 'no-device' | 'in-use' | 'unknown' = 'idle';
+  /** True while a getUserMedia call is in flight — used to disable
+   *  the retry button so users don't queue duplicate prompts. */
+  permissionRequesting: boolean = false;
+  /** True when the user joined audio-only — no video device on the
+   *  machine, or the camera failed but the mic worked. Drives the
+   *  camera-toggle being disabled and the initials avatar showing
+   *  on the local tiles. */
+  audioOnlyMode: boolean = false;
+
+  /** Detected browser family for tailoring unblock instructions. */
+  get permissionBrowser(): 'chrome' | 'edge' | 'firefox' | 'safari' | 'opera' | 'brave' | 'other' {
+    if (typeof navigator === 'undefined') return 'other';
+    const ua = navigator.userAgent || '';
+    if (/Edg\//i.test(ua)) return 'edge';
+    if (/OPR\//i.test(ua)) return 'opera';
+    // Chrome's UA includes "Safari/" too — order matters.
+    if (/Chrome\//i.test(ua) && !/Edg\//i.test(ua) && !/OPR\//i.test(ua)) return 'chrome';
+    if (/Firefox\//i.test(ua)) return 'firefox';
+    if (/Safari\//i.test(ua)) return 'safari';
+    return 'other';
+  }
   connectionError: boolean = false;
   connectionErrorMsg: string = '';
   remoteCount: number = 0;
@@ -491,63 +523,143 @@ export class ChatComponent implements OnInit, OnDestroy {
           }
         });
 
-        navigator.mediaDevices
-          .getUserMedia({
-            video: true,
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-            },
-          })
-          .then((stream) => {
-            this.localStream = stream;
-
-            setTimeout(() => {
-              if (this.localVideoEl?.nativeElement) {
-                this.localVideoEl.nativeElement.srcObject = stream;
-                this.localVideoEl.nativeElement.muted = true;
-                this.localVideoEl.nativeElement.volume = 0;
-                this.localVideoEl.nativeElement.play().catch(() => {});
-              }
-            }, 0);
-
-            this.myPeer.on('call', (call: MediaConnection) => {
-              call.answer(stream);
-              // Track incoming calls in `this.peers` so we can replaceTrack later
-              // (e.g. for screen-share). Without this, the answerer's peer map is
-              // empty and their screen-share never reaches the caller.
-              this.peers[call.peer] = call;
-              const video = document.createElement('video');
-              video.setAttribute('playsinline', '');
-              video.autoplay = true;
-              call.on('stream', (remoteStream: MediaStream) => {
-                console.log(`[STREAM] incoming call stream fired for ${call.peer}`);
-                this.addRemoteStream(video, remoteStream, call.peer);
-              });
-              call.on('close', () => {
-                console.warn(`[PEER] incoming call closed for ${call.peer}`);
-                this.removeParticipant(call.peer);
-                delete this.peers[call.peer];
-              });
-              call.on('error', (err: any) => {
-                console.error('[PEER] call error:', err);
-              });
-              this.attachIceDebug(call, call.peer, 'incoming', video);
-            });
-
-            this.socket.on('user-connected', (data: { peerId: string; displayName: string; avatarUrl: string }) => {
-              this.peerProfiles.set(data.peerId, { name: data.displayName, avatar: data.avatarUrl });
-              setTimeout(() => {
-                this.connectToNewUser(data.peerId, stream);
-              }, 1000);
-            });
-          })
-          .catch((err) => {
-            console.error('[MEDIA] getUserMedia error:', err);
-            this.permissionError = true;
-          });
+        this.requestMedia();
       });
+  }
+
+  /** Audio constraints — kept in one place so the audio-only fallback
+   *  uses the exact same processing as the regular video + audio path. */
+  private readonly micConstraints: MediaTrackConstraints = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  };
+
+  /** Wraps `navigator.mediaDevices.getUserMedia` so we can call it from
+   *  both the initial join flow AND from the "Try again" button on the
+   *  permission gate. Maps standard `DOMException.name` values to the
+   *  internal `permissionStatus` enum so the UI can show the right copy
+   *  for each failure mode.
+   *
+   *  Fallback: if the full video+audio request fails because there's no
+   *  camera on the machine (or the camera is in use / over-constrained),
+   *  retry with audio only so users on laptops without webcams can still
+   *  join the call as an audio participant.
+   */
+  requestMedia(): void {
+    if (this.permissionRequesting) return; // guard double-clicks on Try again
+    this.permissionRequesting = true;
+    this.permissionStatus = 'requesting';
+    // Reset the audio-only flag in case this is a retry after the user
+    // plugged in a camera.
+    this.audioOnlyMode = false;
+    // Keep `permissionError` in lockstep so any existing template paths
+    // that read it stay coherent during the retry round trip.
+    this.permissionError = false;
+
+    navigator.mediaDevices
+      .getUserMedia({ video: true, audio: this.micConstraints })
+      .then((stream) => {
+        this.permissionRequesting = false;
+        this.permissionStatus = 'granted';
+        this.onMediaGranted(stream);
+      })
+      .catch((err: any) => {
+        const name = String(err?.name || '');
+
+        // No camera at all (or one that can't satisfy our constraints,
+        // or one currently held by another app)? Don't block the user —
+        // try audio only. Most laptops without webcams still have a
+        // built-in mic, and a no-video participant is far better than
+        // being stranded outside the call.
+        if (name === 'NotFoundError' || name === 'OverconstrainedError' || name === 'NotReadableError') {
+          navigator.mediaDevices
+            .getUserMedia({ video: false, audio: this.micConstraints })
+            .then((audioStream) => {
+              this.permissionRequesting = false;
+              this.permissionStatus = 'granted';
+              this.audioOnlyMode = true;
+              this.isCameraOn = false; // there's no camera to be "on"
+              this.onMediaGranted(audioStream);
+              // Tell already-connected peers we're effectively camera-off so
+              // their tile for us renders the initials avatar straight away
+              // instead of a black/empty video frame.
+              this.socket?.emit('camera-state', false);
+            })
+            .catch((audioErr: any) => {
+              this.handleMediaError(audioErr);
+            });
+          return;
+        }
+
+        this.handleMediaError(err);
+      });
+  }
+
+  /** Map a DOMException from getUserMedia to the internal permissionStatus
+   *  enum + flip the gate on. Centralised so both the video+audio path
+   *  and the audio-only fallback funnel through one place. */
+  private handleMediaError(err: any): void {
+    this.permissionRequesting = false;
+    const name = String(err?.name || '');
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      this.permissionStatus = 'denied';
+    } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      this.permissionStatus = 'no-device';
+    } else if (name === 'NotReadableError' || name === 'AbortError') {
+      this.permissionStatus = 'in-use';
+    } else {
+      this.permissionStatus = 'unknown';
+    }
+    this.permissionError = true;
+    console.error('[MEDIA] getUserMedia error:', err);
+  }
+
+  /** Post-permission wiring — peer call answering, socket user-connected
+   *  hook, local video preview. Only fires when getUserMedia resolved with
+   *  a real MediaStream. */
+  private onMediaGranted(stream: MediaStream): void {
+    this.localStream = stream;
+
+    setTimeout(() => {
+      if (this.localVideoEl?.nativeElement) {
+        this.localVideoEl.nativeElement.srcObject = stream;
+        this.localVideoEl.nativeElement.muted = true;
+        this.localVideoEl.nativeElement.volume = 0;
+        this.localVideoEl.nativeElement.play().catch(() => {});
+      }
+    }, 0);
+
+    this.myPeer.on('call', (call: MediaConnection) => {
+      call.answer(stream);
+      // Track incoming calls in `this.peers` so we can replaceTrack later
+      // (e.g. for screen-share). Without this, the answerer's peer map is
+      // empty and their screen-share never reaches the caller.
+      this.peers[call.peer] = call;
+      const video = document.createElement('video');
+      video.setAttribute('playsinline', '');
+      video.autoplay = true;
+      call.on('stream', (remoteStream: MediaStream) => {
+        console.log(`[STREAM] incoming call stream fired for ${call.peer}`);
+        this.addRemoteStream(video, remoteStream, call.peer);
+      });
+      call.on('close', () => {
+        console.warn(`[PEER] incoming call closed for ${call.peer}`);
+        this.removeParticipant(call.peer);
+        delete this.peers[call.peer];
+      });
+      call.on('error', (err: any) => {
+        console.error('[PEER] call error:', err);
+      });
+      this.attachIceDebug(call, call.peer, 'incoming', video);
+    });
+
+    this.socket.on('user-connected', (data: { peerId: string; displayName: string; avatarUrl: string }) => {
+      this.peerProfiles.set(data.peerId, { name: data.displayName, avatar: data.avatarUrl });
+      setTimeout(() => {
+        this.connectToNewUser(data.peerId, stream);
+      }, 1000);
+    });
   }
 
   ngOnDestroy(): void {
@@ -598,6 +710,11 @@ export class ChatComponent implements OnInit, OnDestroy {
   }
 
   toggleCamera(): void {
+    // No-op for audio-only joiners — there's no video track to flip.
+    // The HTML disables the button too, but this guard keeps any
+    // future caller (keyboard shortcut, etc.) safe.
+    if (this.audioOnlyMode) return;
+
     this.isCameraOn = !this.isCameraOn;
     if (this.localStream) {
       this.localStream.getVideoTracks().forEach((track) => {
