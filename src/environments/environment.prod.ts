@@ -1,8 +1,8 @@
 export const environment = {
   production: true,
   apiUrl: 'https://api.slocx.com',
-  socketUrl: 'https://video-call-slocx.onrender.com',
-  peerHost: 'slocx-0-0-2.onrender.com',
+  socketUrl: 'https://video.slocx.com',
+  peerHost: 'peer.slocx.com',
   // TURN server — fallback if backend credential endpoint is unavailable
   turnUrl: 'turn.slocx.com',
   turnUsername: 'slocx',

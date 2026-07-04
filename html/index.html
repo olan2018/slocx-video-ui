@@ -337,7 +337,7 @@
         myVideo.muted = true;
 
         const myPeer = new Peer(undefined, {
-          host: "slocx-0-0-2.onrender.com",
+          host: "peer.slocx.com",
         });
 
         const peers = {};
@@ -347,7 +347,7 @@
         });
 
         const socket = io(
-          "https://video-call-slocx.onrender.com"
+          "https://video.slocx.com"
         );
 
         socket.on("sameName", () => {
