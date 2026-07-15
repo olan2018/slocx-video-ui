@@ -11,11 +11,6 @@ import {
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-// Type-only import so the class-tool component doesn't pull React +
-// Excalidraw into the initial bundle. The runtime `mountExcalidraw`
-// is loaded lazily via dynamic import in ngAfterViewChecked below —
-// keeps ~1.5MB of React + Excalidraw out of the meeting UI's cold
-// load path for the ~50% of users who never click "Class Tool".
 import type { ExcalidrawHandle } from './excalidraw-mount';
 import {
   ClassToolSyncService,
@@ -26,20 +21,28 @@ import { Material } from './materials.service';
 import { VocabDeck, VocabCard } from './vocab.service';
 
 // ═══════════════════════════════════════════════════════════════════
-// ClassToolComponent — Phase 3 (whiteboard + materials)
+// ClassToolComponent — floating-panel edition
 //
-// Overlay contains three logical layers:
-//   1. Whiteboard (Excalidraw) — always mounted once the panel opens.
-//   2. Material viewer — full-cover overlay when tutor picks a
-//      material; whiteboard stays alive behind it, so closing the
-//      material reveals the same drawing.
-//   3. Materials drawer — tutor-only side panel for browsing +
-//      picking. Broadcasts `material:open` on pick.
+// Instead of one full-screen overlay containing every tool, each tool
+// (whiteboard, materials, vocab) renders as its own independent
+// floating panel over the meeting UI. Panels can be opened/closed
+// individually so the video grid stays visible while a tutor works
+// with a tool.
 //
-// State is server-authoritative via ClassToolSyncService: every
-// permission / material change flows through a socket round-trip so
-// tutor + student converge on the same view.
+// The launch UI (Tools button + tool picker popover) lives in the
+// meeting action bar (chat.component.html) and calls into this
+// component via ViewChild → openTool(kind).
+//
+// Auto-open rules (student side):
+//   - material$ fires → materials panel auto-opens (they need to
+//     see the file the tutor just showed).
+//   - vocab$ fires    → vocab panel auto-opens (same reasoning).
+//   - whiteboard      → never auto-opens; student opens when they
+//                       want to see it. Board sync keeps the panel
+//                       up-to-date whether or not it's on screen.
 // ═══════════════════════════════════════════════════════════════════
+
+export type ClassToolPanelKind = 'whiteboard' | 'materials' | 'vocab';
 
 @Component({
   selector: 'app-class-tool',
@@ -50,24 +53,24 @@ import { VocabDeck, VocabCard } from './vocab.service';
 export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   @Input({ required: true }) isTutor!: boolean;
 
-  open = false;
+  // Per-panel visibility. Each panel opens/closes independently.
+  showWhiteboard = false;
+  showMaterials = false;
+  showVocab = false;
 
-  /** Server-authoritative student write permission. Only the tutor
-   *  can flip it; both roles observe the resulting broadcast. */
+  /** Tutor-controlled: is the student allowed to write on the board? */
   studentCanWrite = false;
 
-  /** Whether the materials drawer (tutor-only browser) is showing. */
-  materialsOpen = false;
-  /** Whether the vocab drawer (tutor-only browser) is showing. */
-  vocabOpen = false;
+  /** Materials panel mode. Tutor toggles between browsing their
+   *  library and viewing whatever they've picked; student sees
+   *  only "view" and only when a material is active. */
+  materialsMode: 'browse' | 'view' = 'browse';
 
-  /** Currently-shown material, or null if the viewer is dismissed.
-   *  Both tutor and student subscribe to sync.material$ so they
-   *  converge on the same value. */
+  /** Vocab panel mode. Same pattern as materialsMode. */
+  vocabMode: 'manage' | 'practice' = 'manage';
+
   activeMaterial: ActiveMaterialPayload | null = null;
-
-  /** Currently-active vocab practice snapshot (or null). Same shared
-   *  subscription pattern as activeMaterial. */
+  activeMaterialSafeUrl: SafeResourceUrl | null = null;
   activeVocab: ActiveVocabPayload | null = null;
 
   @ViewChild('boardHost', { static: false }) boardHost?: ElementRef<HTMLDivElement>;
@@ -75,30 +78,10 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   private handle: ExcalidrawHandle | null = null;
   private subs: Subscription[] = [];
   private queuedScene: readonly unknown[] | null = null;
-
-  /** Guard so ngAfterViewChecked doesn't fire the dynamic import a
-   *  second time while the first one is still resolving. AVC runs on
-   *  every change-detection tick — without this, opening the panel
-   *  would kick off dozens of parallel `import()` promises. */
   private mountingBoard = false;
 
-  /** True while the lazy Excalidraw chunk is downloading + mounting.
-   *  Drives the "Loading whiteboard…" overlay so the panel isn't
-   *  visually empty during the ~200ms first-open beat. */
   boardMountPending = false;
-
-  /** Set if the lazy chunk fails to load (usually a deploy artifact-
-   *  path mismatch or a CSP/adblock block). Shown as an error banner
-   *  inside the board area so the failure is visible instead of just
-   *  leaving a mysterious blank canvas. */
   boardMountError = '';
-
-  /** Sanitized `SafeResourceUrl` for the PDF iframe. Angular's default
-   *  sanitizer strips iframe src to prevent XSS; because we trust the
-   *  URLs (tutor picked from their own material library — auth-scoped
-   *  by JWT on the backend), we bypass explicitly. Recomputed only
-   *  when activeMaterial changes so we don't rebuild on every CD tick. */
-  activeMaterialSafeUrl: SafeResourceUrl | null = null;
 
   constructor(
     private sync: ClassToolSyncService,
@@ -107,9 +90,6 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Subscribe immediately (before panel opens) so we don't miss the
-    // server's join-time replay of the cached scene / permission /
-    // material.
     this.subs.push(
       this.sync.scene$.subscribe((payload) => {
         if (this.handle) this.handle.applyRemoteScene(payload.elements);
@@ -125,37 +105,42 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
         this.activeMaterialSafeUrl = m
           ? this.sanitizer.bypassSecurityTrustResourceUrl(m.url)
           : null;
-        // When the tutor picks a material, auto-open the class tool on
-        // the STUDENT side too so they don't miss it. Tutor-side
-        // auto-open is redundant (they clicked pick) but harmless.
-        if (m) this.open = true;
+        if (m) {
+          // Auto-open + switch panel to view mode so both sides see
+          // the picked file without extra clicks.
+          this.showMaterials = true;
+          this.materialsMode = 'view';
+        }
         this.cdr.markForCheck();
       }),
       this.sync.vocab$.subscribe((v) => {
         this.activeVocab = v;
-        // Same auto-open behavior as material — student can't miss
-        // the practice session starting.
-        if (v) this.open = true;
+        if (v) {
+          this.showVocab = true;
+          this.vocabMode = 'practice';
+        }
         this.cdr.markForCheck();
       }),
     );
   }
 
   ngAfterViewChecked(): void {
-    if (this.open && this.boardHost && !this.handle && !this.mountingBoard && !this.boardMountError) {
+    // Whiteboard mount runs only when its own panel is open (not any
+    // panel). Excalidraw + React chunk stays deferred until the tutor
+    // or student actually asks for the board.
+    if (
+      this.showWhiteboard &&
+      this.boardHost &&
+      !this.handle &&
+      !this.mountingBoard &&
+      !this.boardMountError
+    ) {
       this.mountingBoard = true;
       this.boardMountPending = true;
       this.cdr.markForCheck();
-      // Dynamic import — React + Excalidraw are code-split into their
-      // own chunk that only loads on first panel open. Webpack picks
-      // this up automatically because the specifier is a static
-      // string literal.
       import('./excalidraw-mount')
         .then((mod) => {
-          // Guard against a race: user closed the panel while the
-          // chunk was in flight. When they reopen, ngAfterViewChecked
-          // will fire again and retry the mount.
-          if (!this.boardHost || !this.open) {
+          if (!this.boardHost || !this.showWhiteboard) {
             this.mountingBoard = false;
             this.boardMountPending = false;
             this.cdr.markForCheck();
@@ -171,17 +156,12 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
             this.handle.applyRemoteScene(this.queuedScene);
             this.queuedScene = null;
           }
-          // Apply the server-authoritative permission the moment the
-          // board is live — subscription may have fired before mount.
           if (!this.isTutor) this.handle.setReadOnly(!this.studentCanWrite);
           this.mountingBoard = false;
           this.boardMountPending = false;
           this.cdr.markForCheck();
         })
         .catch((err) => {
-          // Chunk fetch failed (network, CSP, deploy path mismatch).
-          // Surface it in the UI + log so we can tell "blank panel"
-          // apart from "empty canvas".
           console.error('[CLASS-TOOL] Excalidraw chunk failed to load:', err);
           this.mountingBoard = false;
           this.boardMountPending = false;
@@ -198,18 +178,40 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.handle = null;
   }
 
-  openPanel(): void {
-    this.open = true;
+  // ── Panel open / close (called from the meeting action bar) ──
+
+  openTool(kind: ClassToolPanelKind): void {
+    if (kind === 'whiteboard') {
+      this.showWhiteboard = true;
+    } else if (kind === 'materials') {
+      // Only tutor can open materials cold. Student sees it only when
+      // the tutor picks something (handled in material$ subscription).
+      if (!this.isTutor) return;
+      this.showMaterials = true;
+      this.materialsMode = this.activeMaterial ? 'view' : 'browse';
+    } else if (kind === 'vocab') {
+      if (!this.isTutor) return;
+      this.showVocab = true;
+      this.vocabMode = this.activeVocab ? 'practice' : 'manage';
+    }
+    this.cdr.markForCheck();
   }
 
-  closePanel(): void {
-    this.open = false;
-    // Also close both drawers so they don't reopen on next open.
-    // Board + activeMaterial + activeVocab persist so the class picks
-    // up where it left off.
-    this.materialsOpen = false;
-    this.vocabOpen = false;
+  closeWhiteboardPanel(): void {
+    this.showWhiteboard = false;
+    // Board tree stays mounted so the drawing survives across close/
+    // reopen inside one lesson. destroy() only runs in ngOnDestroy.
   }
+
+  closeMaterialsPanel(): void {
+    this.showMaterials = false;
+  }
+
+  closeVocabPanel(): void {
+    this.showVocab = false;
+  }
+
+  // ── Whiteboard actions ──────────────────────────────────────
 
   toggleStudentWrite(): void {
     const next = !this.studentCanWrite;
@@ -217,39 +219,38 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.sync.broadcastPermission(next);
   }
 
-  openMaterialsDrawer(): void {
-    this.materialsOpen = true;
-  }
+  // ── Materials actions ───────────────────────────────────────
 
-  closeMaterialsDrawer(): void {
-    this.materialsOpen = false;
+  materialsShowBrowse(): void {
+    this.materialsMode = 'browse';
   }
 
   onPickMaterial(m: Material): void {
-    // Broadcast to the room — server relays back including to us, so
-    // sync.material$ fires and updates activeMaterial.
     this.sync.broadcastOpenMaterial({ id: m.id, url: m.url, title: m.title });
-    this.materialsOpen = false;
+    // Broadcast triggers material$ which flips mode to 'view'.
   }
 
   closeActiveMaterial(): void {
-    // Tutor-only in the template — button is hidden for students.
     this.sync.broadcastCloseMaterial();
+    if (this.isTutor) this.materialsMode = 'browse';
   }
 
-  // ── Vocab actions ─────────────────────────────────────────────
-
-  openVocabDrawer(): void {
-    this.vocabOpen = true;
+  materialKind(): 'image' | 'pdf' | 'video' | 'audio' | 'other' {
+    const url = this.activeMaterial?.url ?? '';
+    const clean = url.split('?')[0].toLowerCase();
+    if (/\.(jpg|jpeg|png|gif|webp|svg)$/.test(clean)) return 'image';
+    if (/\.pdf$/.test(clean)) return 'pdf';
+    if (/\.(mp4|webm|mov|mkv)$/.test(clean)) return 'video';
+    if (/\.(mp3|wav|ogg|m4a)$/.test(clean)) return 'audio';
+    return 'other';
   }
 
-  closeVocabDrawer(): void {
-    this.vocabOpen = false;
+  // ── Vocab actions ───────────────────────────────────────────
+
+  vocabShowManage(): void {
+    this.vocabMode = 'manage';
   }
 
-  /** Drawer emitted (practice) — build the shared snapshot and
-   *  broadcast. Server relays back including to us, so activeVocab
-   *  updates via the vocab$ subscription. */
   onStartPractice(evt: { deck: VocabDeck; cards: VocabCard[] }): void {
     const payload: ActiveVocabPayload = {
       deckId: evt.deck.id,
@@ -265,11 +266,9 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
       revealed: false,
     };
     this.sync.broadcastVocab(payload);
-    this.vocabOpen = false;
+    // Broadcast triggers vocab$ which flips mode to 'practice'.
   }
 
-  /** Tutor-only navigation. Each button re-broadcasts a modified
-   *  snapshot so both sides converge on the same card + reveal state. */
   vocabPrev(): void {
     if (!this.activeVocab) return;
     if (this.activeVocab.index <= 0) return;
@@ -300,25 +299,11 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   closeActiveVocab(): void {
     this.sync.broadcastCloseVocab();
+    if (this.isTutor) this.vocabMode = 'manage';
   }
 
   get currentVocabCard() {
     if (!this.activeVocab || this.activeVocab.cards.length === 0) return null;
     return this.activeVocab.cards[this.activeVocab.index] ?? null;
-  }
-
-  // ── Material viewer MIME picker ─────────────────────────────────
-  // Cheap URL-suffix sniffing. Good enough for the four types we can
-  // render inline; everything else falls through to a "Open in new
-  // tab" link.
-
-  materialKind(): 'image' | 'pdf' | 'video' | 'audio' | 'other' {
-    const url = this.activeMaterial?.url ?? '';
-    const clean = url.split('?')[0].toLowerCase();
-    if (/\.(jpg|jpeg|png|gif|webp|svg)$/.test(clean)) return 'image';
-    if (/\.pdf$/.test(clean)) return 'pdf';
-    if (/\.(mp4|webm|mov|mkv)$/.test(clean)) return 'video';
-    if (/\.(mp3|wav|ogg|m4a)$/.test(clean)) return 'audio';
-    return 'other';
   }
 }

@@ -1,9 +1,11 @@
-/* Class-tool styles — self-contained; safe to sit at any spot in the
-   meeting DOM. Overlay uses position:fixed so it floats above the
-   video grid regardless of the host layout. */
+/* Floating class-tool panels.
+   Each panel is a fixed-position card that lives above the meeting
+   UI without covering it. Positioned bottom-right, above the action
+   bar (bottom: 100px). Multiple panels stack diagonally so none is
+   ever fully hidden. */
 
 :host {
-  --ct-bg: #0f172a;
+  --ct-bg: #ffffff;
   --ct-panel: #ffffff;
   --ct-border: #e2e8f0;
   --ct-text: #0f172a;
@@ -11,202 +13,178 @@
   --ct-accent: #4f46e5;
   --ct-accent-hover: #4338ca;
   --ct-success: #10b981;
+  --ct-danger: #ef4444;
+  --ct-shadow: 0 20px 40px rgba(15, 23, 42, 0.18), 0 6px 12px rgba(15, 23, 42, 0.08);
   display: contents;
 }
 
-/* ── Launch button — floats bottom-right when panel is closed ─── */
-
-.ct-launch {
+/* Base panel — every kind (whiteboard/materials/vocab) shares this. */
+.ct-panel {
   position: fixed;
-  right: 20px;
-  bottom: 100px;
-  z-index: 9998;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: var(--ct-accent);
-  color: #fff;
-  border: none;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-
-.ct-launch:hover {
-  background: var(--ct-accent-hover);
-  transform: translateY(-1px);
-}
-
-.ct-launch__icon {
-  display: inline-flex;
-}
-
-/* ── Full-screen overlay when open ─────────────────────────────── */
-
-.ct-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: var(--ct-panel);
+  bottom: 110px;
+  right: 24px;
+  width: min(720px, 90vw);
+  height: min(520px, 70vh);
+  background: var(--ct-bg);
+  color: var(--ct-text);
+  border: 1px solid var(--ct-border);
+  border-radius: 12px;
+  box-shadow: var(--ct-shadow);
+  z-index: 9500;
   display: flex;
   flex-direction: column;
-  color: var(--ct-text);
+  overflow: hidden;
+  animation: ct-pop-in 0.15s ease-out;
 }
 
-.ct-topbar {
+@keyframes ct-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Cascade when multiple panels are open — each successive kind sits
+   offset diagonally so headers stay visible. Order:
+     whiteboard → base position
+     materials  → +24 offset
+     vocab      → +48 offset
+   Note: :not() selectors keep the offset from stacking when only some
+   panels are visible. Simple + good-enough for MVP; the alternative
+   (drag positioning) is a bigger lift. */
+.ct-panel--materials {
+  bottom: 134px;
+  right: 48px;
+  z-index: 9501;
+}
+.ct-panel--vocab {
+  bottom: 158px;
+  right: 72px;
+  z-index: 9502;
+}
+
+/* Whiteboard panel is a bit larger — canvases benefit from the room. */
+.ct-panel--whiteboard {
+  width: min(820px, 92vw);
+  height: min(600px, 75vh);
+}
+
+/* Header */
+
+.ct-panel__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 20px;
-  background: #f8fafc;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--ct-border);
+  background: #f8fafc;
   flex-shrink: 0;
+  gap: 10px;
 }
 
-.ct-topbar__title {
+.ct-panel__title {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.ct-topbar__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--ct-success);
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
-}
-
-.ct-topbar__actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 16px;
-}
-
-/* Toggle — permission grant for the student */
-
-.ct-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
   font-size: 13px;
-  color: var(--ct-text-dim);
-}
-
-.ct-toggle__input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.ct-toggle__track {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  background: #cbd5e1;
-  border-radius: 999px;
-  transition: background 0.15s ease;
-}
-
-.ct-toggle__thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 16px;
-  height: 16px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform 0.15s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-.ct-toggle--on .ct-toggle__track {
-  background: var(--ct-accent);
-}
-
-.ct-toggle--on .ct-toggle__thumb {
-  transform: translateX(16px);
-}
-
-.ct-toggle--on .ct-toggle__label {
+  font-weight: 700;
   color: var(--ct-text);
-  font-weight: 600;
+  min-width: 0;
+  flex: 1;
 }
 
-/* Student-side badge showing current permission state — read-only for
-   the student, no action; the toggle itself is tutor-only. */
+.ct-panel__subtitle {
+  font-weight: 500;
+  color: var(--ct-text-dim);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
 
-.ct-perm-badge {
+.ct-panel__actions {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  background: #f1f5f9;
-  color: var(--ct-text-dim);
-  border: 1px solid var(--ct-border);
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-.ct-perm-badge--on {
-  background: rgba(16, 185, 129, 0.12);
-  color: #047857;
-  border-color: rgba(16, 185, 129, 0.35);
-}
-
-/* Close button */
-
-.ct-close {
+.ct-panel__close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border: 1px solid var(--ct-border);
   background: #fff;
   color: var(--ct-text-dim);
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.12s, color 0.12s;
 }
 
-.ct-close:hover {
+.ct-panel__close:hover {
   background: #f1f5f9;
   color: var(--ct-text);
 }
 
-/* Body — flex container so the board fills all remaining height and
-   overlays (material viewer, drawer) sit on top via position:absolute. */
+.ct-panel__pill {
+  padding: 4px 10px;
+  border: 1px solid var(--ct-border);
+  background: #fff;
+  color: var(--ct-text);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 
-.ct-body {
+.ct-panel__pill:hover { background: #f1f5f9; }
+
+.ct-panel__pill--danger { color: var(--ct-danger); border-color: rgba(239, 68, 68, 0.35); }
+.ct-panel__pill--danger:hover { background: rgba(239, 68, 68, 0.08); }
+
+/* Body */
+
+.ct-panel__body {
   flex: 1;
   min-height: 0;
   position: relative;
+  overflow: auto;
+  padding: 12px;
+}
+
+/* Flush body — used when the child (drawer / viewer) provides its
+   own padding + scrolling. */
+.ct-panel__body--flush {
+  padding: 0;
+  overflow: hidden;
   display: flex;
 }
 
-/* Board host — where Excalidraw mounts. Fills the body; overlays sit
-   on top. Excalidraw uses width/height:100% internally. */
-
-.ct-board {
-  flex: 1;
-  min-height: 0;
-  position: relative;
+.ct-panel__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ct-text-dim);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px;
 }
 
-/* Loading + error states shown INSIDE the board host while the lazy
-   Excalidraw chunk is downloading (or if the download fails). Both
-   are absolutely-positioned overlays so Excalidraw can render on top
-   once it's ready and cover them. */
+/* ── Whiteboard body — Excalidraw mount host ─────────────────── */
+
+.ct-board {
+  position: absolute;
+  inset: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--ct-border);
+}
 
 .ct-board__loading,
 .ct-board__error {
@@ -225,7 +203,6 @@
 .ct-board__error {
   color: #b91c1c;
   background: rgba(239, 68, 68, 0.05);
-  flex-direction: row;
   padding: 20px;
   text-align: center;
 }
@@ -243,129 +220,90 @@
   to { transform: rotate(360deg); }
 }
 
-/* ── Materials launch button (topbar) ──────────────────────────── */
+/* ── Tutor permission toggle (in whiteboard header) ─────────── */
 
-.ct-materials-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 1px solid var(--ct-border);
-  background: #fff;
-  color: var(--ct-text);
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-}
-
-.ct-materials-btn:hover {
-  background: #f1f5f9;
-}
-
-.ct-materials-btn--on {
-  background: var(--ct-accent);
-  color: #fff;
-  border-color: var(--ct-accent);
-}
-
-/* ── Material viewer (full-cover overlay on top of the board) ──── */
-
-.ct-material-viewer {
-  position: absolute;
-  inset: 0;
-  background: #f8fafc;
-  display: flex;
-  flex-direction: column;
-  z-index: 3;
-}
-
-.ct-material-viewer__topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  background: #fff;
-  border-bottom: 1px solid var(--ct-border);
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.ct-material-viewer__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ct-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.ct-material-viewer__actions {
+.ct-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
-}
-
-.ct-material-viewer__open {
-  padding: 5px 10px;
-  border: 1px solid var(--ct-border);
-  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
   color: var(--ct-text-dim);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
+}
+
+.ct-toggle__input { position: absolute; opacity: 0; pointer-events: none; }
+
+.ct-toggle__track {
+  position: relative;
+  width: 30px;
+  height: 16px;
+  background: #cbd5e1;
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.ct-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
   background: #fff;
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-.ct-material-viewer__open:hover {
-  background: #f1f5f9;
-  color: var(--ct-text);
-}
+.ct-toggle--on .ct-toggle__track { background: var(--ct-accent); }
+.ct-toggle--on .ct-toggle__thumb { transform: translateX(14px); }
+.ct-toggle--on .ct-toggle__label { color: var(--ct-text); font-weight: 600; }
 
-.ct-material-viewer__close {
+.ct-perm-badge {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--ct-border);
-  background: #fff;
-  color: var(--ct-text-dim);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.ct-material-viewer__close:hover {
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
   background: #f1f5f9;
-  color: var(--ct-text);
+  color: var(--ct-text-dim);
+  border: 1px solid var(--ct-border);
 }
 
-.ct-material-viewer__body {
+.ct-perm-badge--on {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+/* ── Materials viewer ────────────────────────────────────────── */
+
+.ct-material-viewer {
   flex: 1;
-  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   padding: 12px;
-  overflow: hidden;
-  background: #f8fafc;
+  gap: 10px;
+  min-height: 0;
 }
 
 .ct-material-viewer__img {
   max-width: 100%;
   max-height: 100%;
+  min-height: 0;
   object-fit: contain;
   background: #fff;
   border: 1px solid var(--ct-border);
   border-radius: 6px;
+  align-self: center;
 }
 
 .ct-material-viewer__iframe {
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   border: 1px solid var(--ct-border);
   border-radius: 6px;
   background: #fff;
@@ -379,7 +317,7 @@
 }
 
 .ct-material-viewer__fallback {
-  max-width: 420px;
+  margin: auto;
   padding: 24px;
   text-align: center;
   font-size: 13px;
@@ -388,50 +326,36 @@
   background: #fff;
   border: 1px dashed var(--ct-border);
   border-radius: 8px;
+  max-width: 420px;
 }
 
 .ct-material-viewer__fallback a {
   display: inline-block;
-  margin-top: 8px;
+  margin-left: 4px;
   color: var(--ct-accent);
   font-weight: 600;
 }
 
-/* ── Vocab presenter — full-cover overlay, same z-index rules ── */
-
-.ct-vocab-viewer {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
+.ct-material-viewer__footer {
   display: flex;
-  flex-direction: column;
-  z-index: 3;
-}
-
-.ct-vocab-viewer__topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 20px;
-  background: rgba(255, 255, 255, 0.85);
-  border-bottom: 1px solid var(--ct-border);
-  backdrop-filter: blur(6px);
+  gap: 8px;
+  justify-content: flex-end;
   flex-shrink: 0;
 }
 
-.ct-vocab-viewer__title-wrap {
+/* ── Vocab presenter ─────────────────────────────────────────── */
+
+.ct-vocab {
+  flex: 1;
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  padding: 16px;
   gap: 12px;
+  align-items: center;
+  min-height: 0;
 }
 
-.ct-vocab-viewer__deck-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ct-text);
-}
-
-.ct-vocab-viewer__progress {
+.ct-vocab__meta {
   font-size: 11px;
   color: var(--ct-text-dim);
   font-weight: 600;
@@ -439,39 +363,26 @@
   letter-spacing: 0.4px;
 }
 
-.ct-vocab-viewer__body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-}
-
 .ct-vocab-card {
   width: 100%;
-  max-width: 640px;
-  min-height: 240px;
+  flex: 1;
+  min-height: 160px;
   background: #fff;
   border: 1px solid var(--ct-border);
-  border-radius: 16px;
-  padding: 40px 32px;
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  gap: 14px;
+  transition: border-color 0.2s ease;
 }
 
-.ct-vocab-card--revealed {
-  border-color: rgba(79, 70, 229, 0.35);
-  box-shadow: 0 12px 32px rgba(79, 70, 229, 0.12);
-}
+.ct-vocab-card--revealed { border-color: rgba(79, 70, 229, 0.35); }
 
 .ct-vocab-card__front {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--ct-text);
   text-align: center;
@@ -481,90 +392,85 @@
 
 .ct-vocab-card__reveal {
   width: 100%;
-  padding-top: 20px;
+  padding-top: 14px;
   border-top: 1px dashed var(--ct-border);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 
 .ct-vocab-card__back {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--ct-accent);
   text-align: center;
-  line-height: 1.3;
 }
 
 .ct-vocab-card__example {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--ct-text-dim);
   font-style: italic;
   text-align: center;
-  line-height: 1.4;
 }
 
-.ct-vocab-card__note {
+.ct-vocab__controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.ct-vocab__hint {
   font-size: 12px;
   color: var(--ct-text-dim);
-  text-align: center;
-  padding: 6px 12px;
-  background: #f1f5f9;
-  border-radius: 999px;
-}
-
-.ct-vocab-viewer__controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.85);
-  border-top: 1px solid var(--ct-border);
-  backdrop-filter: blur(6px);
-  flex-shrink: 0;
-}
-
-.ct-vocab-viewer__controls--readonly {
-  color: var(--ct-text-dim);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.ct-vocab-viewer__note {
   font-style: italic;
 }
 
 .ct-vocab-btn {
-  padding: 8px 18px;
+  padding: 6px 14px;
   border: 1px solid var(--ct-border);
   background: #fff;
   color: var(--ct-text);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition: background 0.12s;
 }
 
-.ct-vocab-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-}
-
-.ct-vocab-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.ct-vocab-btn:hover:not(:disabled) { background: #f1f5f9; }
+.ct-vocab-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .ct-vocab-btn--primary {
   background: var(--ct-accent);
   border-color: var(--ct-accent);
   color: #fff;
-  min-width: 140px;
+  min-width: 110px;
 }
 
 .ct-vocab-btn--primary:hover:not(:disabled) {
   background: var(--ct-accent-hover);
   border-color: var(--ct-accent-hover);
+}
+
+.ct-vocab-btn--ghost {
+  color: var(--ct-danger);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.ct-vocab-btn--ghost:hover:not(:disabled) { background: rgba(239, 68, 68, 0.08); }
+
+/* Drawer children rendered flush inside the panel body. Both drawers
+   already position:absolute themselves (holdover from the old overlay
+   layout) — turn that off so they flow inside the panel instead. */
+.ct-panel ::ng-deep app-materials-drawer > aside,
+.ct-panel ::ng-deep app-vocab-drawer > aside {
+  position: static;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  transform: none !important;
+  border-left: none;
+  box-shadow: none;
+  border-radius: 0;
 }

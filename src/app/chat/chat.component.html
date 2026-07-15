@@ -601,6 +601,39 @@
         </div>
       </div>
 
+      <!-- Class tools launcher. Popover mirrors the .quiz-launch-popover
+           pattern above the button. Each tool opens as its own floating
+           panel via ClassToolComponent.openTool(kind). -->
+      <div class="meet-ctrl-tools-wrap">
+        <button class="meet-ctrl-btn"
+                [class.meet-ctrl-active]="classToolsMenuOpen"
+                (click)="toggleClassToolsMenu()"
+                title="Class tools">
+          <i class="bi bi-easel-fill"></i>
+          <span class="meet-ctrl-label">Tools</span>
+        </button>
+        <div class="class-tools-popover" *ngIf="classToolsMenuOpen">
+          <button type="button" class="class-tools-pick" (click)="openClassTool('whiteboard')">
+            <i class="bi bi-easel"></i>
+            <span>Whiteboard</span>
+          </button>
+          <button *ngIf="isTutor"
+                  type="button"
+                  class="class-tools-pick"
+                  (click)="openClassTool('materials')">
+            <i class="bi bi-folder2-open"></i>
+            <span>Materials</span>
+          </button>
+          <button *ngIf="isTutor"
+                  type="button"
+                  class="class-tools-pick"
+                  (click)="openClassTool('vocab')">
+            <i class="bi bi-card-list"></i>
+            <span>Vocab</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Chat -->
       <button class="meet-ctrl-btn meet-ctrl-chat-btn" [class.meet-ctrl-active]="chatOpen" (click)="toggleChat()" title="Chat">
         <span class="chat-btn-inner">

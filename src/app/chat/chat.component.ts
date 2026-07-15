@@ -9,6 +9,7 @@ import Peer, { MediaConnection } from 'peerjs';
 import { io } from 'socket.io-client';
 import * as Qs from 'qs';
 import { environment } from '../../environments/environment';
+import { ClassToolComponent, ClassToolPanelKind } from '../class-tool/class-tool.component';
 
 export interface ChatMessage {
   displayName: string;
@@ -65,6 +66,22 @@ export interface QuizStudentResult {
 export class ChatComponent implements OnInit, OnDestroy {
   @ViewChild('videos') videoGrid!: ElementRef;
   @ViewChild('localVideo') localVideoEl!: ElementRef<HTMLVideoElement>;
+  /** Handle to the class-tool component so the Tools popover in the
+   *  action bar can call openTool()/closeTool() directly. */
+  @ViewChild(ClassToolComponent) classTool?: ClassToolComponent;
+
+  /** Tools popover open state — the small radial-ish menu that
+   *  appears above the "Tools" button in the action bar. */
+  classToolsMenuOpen = false;
+
+  toggleClassToolsMenu(): void {
+    this.classToolsMenuOpen = !this.classToolsMenuOpen;
+  }
+
+  openClassTool(kind: ClassToolPanelKind): void {
+    this.classToolsMenuOpen = false;
+    this.classTool?.openTool(kind);
+  }
   // Second local video element used as the "spotlight" tile when the user
   // pins themselves. Bound to the same MediaStream as `localVideoEl` so
   // mic/cam toggles propagate automatically. `{ static: false }` because
