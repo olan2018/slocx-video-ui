@@ -60,9 +60,13 @@ export class MaterialsService {
     const q = search.trim();
     if (q) qs.set('q', q);
 
+    // NOTE: this backend's protect() reads the Authorization header
+    // as-is (no "Bearer " prefix stripping). Sending the standard
+    // "Bearer <jwt>" trips the JWT lib's "tokenstring should not
+    // contain 'bearer '" check. Matches slocx-frontend's interceptor.
     const res = await fetch(
       `${environment.apiUrl}/v1/tutor/me/materials?${qs.toString()}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: { Authorization: token } },
     );
     if (!res.ok) {
       // 401 or 5xx — surface an empty page. The drawer's error banner

@@ -130,7 +130,11 @@ export class VocabService {
     return res.ok;
   }
 
+  // NOTE: this backend's protect() reads the Authorization header
+  // as-is (no "Bearer " prefix stripping). Sending the standard
+  // "Bearer <jwt>" trips the JWT lib's "tokenstring should not
+  // contain 'bearer '" check. Matches slocx-frontend's interceptor.
   private authHeaders(token: string): Record<string, string> {
-    return { Authorization: `Bearer ${token}` };
+    return { Authorization: token };
   }
 }
