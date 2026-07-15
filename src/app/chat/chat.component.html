@@ -52,6 +52,75 @@
   <!-- ══ Main area ════════════════════════════════════════════ -->
   <div class="meet-main" [class.meet-main--local-pinned]="pinnedPeerId === 'local'">
 
+    <!-- Classroom meeting-link role choice. Shown ONLY for
+         ?public=1&kind=classroom links, before the name-entry screen.
+         Fork: log in as tutor (unlocks tutor-only controls) or join
+         as student (falls through to the name-entry screen). -->
+    <div class="meet-prejoin" *ngIf="awaitingClassroomChoice">
+      <div class="meet-prejoin-card">
+        <div class="meet-prejoin-icon">
+          <i class="bi bi-mortarboard-fill"></i>
+        </div>
+        <h2 class="meet-prejoin-title">Join classroom</h2>
+        <p class="meet-prejoin-sub">Are you the tutor for this class, or joining as a student?</p>
+
+
+        <div *ngIf="!showTutorLoginForm" class="meet-prejoin-choices">
+          <button class="meet-prejoin-btn meet-prejoin-btn--primary"
+                  (click)="chooseTutor()">
+            <i class="bi bi-person-badge-fill"></i>
+            I'm the tutor
+          </button>
+          <button class="meet-prejoin-btn meet-prejoin-btn--ghost"
+                  (click)="chooseStudent()">
+            <i class="bi bi-people-fill"></i>
+            Join as a student
+          </button>
+          <p class="meet-prejoin-hint">
+            Tutors sign in with their Slocx tutor credentials. Students
+            just enter a display name.
+          </p>
+        </div>
+
+
+        <div *ngIf="showTutorLoginForm">
+          <input class="meet-prejoin-input"
+                 type="email"
+                 [(ngModel)]="tutorLoginEmail"
+                 (keydown)="onTutorLoginKeydown($event)"
+                 placeholder="Tutor email"
+                 autocomplete="email"
+                 autofocus />
+          <input class="meet-prejoin-input"
+                 type="password"
+                 [(ngModel)]="tutorLoginPassword"
+                 (keydown)="onTutorLoginKeydown($event)"
+                 placeholder="Password"
+                 autocomplete="current-password" />
+
+          <p *ngIf="tutorLoginError" class="meet-prejoin-error">
+            <i class="bi bi-exclamation-circle"></i>
+            {{ tutorLoginError }}
+          </p>
+
+          <button class="meet-prejoin-btn"
+                  (click)="submitTutorLogin()"
+                  [disabled]="tutorLoginSubmitting || !tutorLoginEmail.trim() || !tutorLoginPassword">
+            <i class="bi bi-box-arrow-in-right"></i>
+            {{ tutorLoginSubmitting ? 'Signing in…' : 'Sign in as tutor' }}
+          </button>
+
+          <button class="meet-prejoin-btn meet-prejoin-btn--link"
+                  type="button"
+                  (click)="showTutorLoginForm = false; tutorLoginError = ''"
+                  [disabled]="tutorLoginSubmitting">
+            ← Back
+          </button>
+        </div>
+      </div>
+    </div>
+
+
     <!-- Public-meeting name entry. Shown when ?public=1 without a `name`
          URL param. The rest of the join flow (socket, peer, getUserMedia)
          is deferred until the guest submits — no camera prompt happens
@@ -87,7 +156,7 @@
          around it is ours: a retry button that re-fires the prompt, copy
          that adapts to the failure cause (denied vs no device vs in use),
          and browser-specific steps for the "permanently blocked" case. -->
-    <div class="perm-gate" *ngIf="permissionError && !awaitingNameEntry">
+    <div class="perm-gate" *ngIf="permissionError && !awaitingNameEntry && !awaitingClassroomChoice">
       <div class="perm-gate__card">
 
         <!-- Icon mirrors the failure cause. -->

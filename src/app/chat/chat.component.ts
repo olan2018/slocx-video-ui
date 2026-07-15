@@ -179,6 +179,24 @@ export class ChatComponent implements OnInit, OnDestroy {
   awaitingNameEntry: boolean = false;
   guestNameInput: string = '';
 
+  // ── Classroom meeting-link role choice ────────────────────
+  // Shown BEFORE awaitingNameEntry when the URL carries
+  // `?public=1&kind=classroom`. Gives the visitor a fork: log in as
+  // a tutor (real credentials → scoped token; unlocks tutor-only
+  // controls) or continue as a student (name entry, existing flow).
+  awaitingClassroomChoice: boolean = false;
+  /** True after the tutor clicks "I'm a tutor" — expands the inline
+   *  login form under the choice buttons. */
+  showTutorLoginForm: boolean = false;
+  tutorLoginEmail: string = '';
+  tutorLoginPassword: string = '';
+  tutorLoginError: string = '';
+  tutorLoginSubmitting: boolean = false;
+  /** Scoped JWT proving tutor role for this room. Sent with every
+   *  joinRoom emit; signaling server verifies before admitting as
+   *  tutor. Empty for students / non-classroom meetings. */
+  private tutorToken: string = '';
+
   // ── Post-call rating ───────────────────────────────────────
   // `reviewTicket` is the HMAC-signed capability token the slocx-frontend
   // mints when the student clicks "Join class". It encodes (user_id,
@@ -331,6 +349,20 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
     this.timerRemainingSecs = this.lessonDurationSecs;
 
+    // Classroom meeting-link fork: BEFORE the name entry screen, offer
+    // "Join as tutor" (login form) vs "Join as student" (name entry).
+    // Only for public classroom links, and only when the URL didn't
+    // already resolve identity via `name`.
+    if (
+      this.isPublicMeeting &&
+      !name &&
+      kindParam === 'classroom'
+    ) {
+      this.myUsername = username || this.generateGuestId();
+      this.awaitingClassroomChoice = true;
+      return; // wait for chooseStudent() / submitTutorLogin()
+    }
+
     // Public meetings: if no `name` came in on the URL, gate the entire
     // join flow behind a name-entry screen. A random `user` id is still
     // assigned so each browser is uniquely identifiable to the signaling
@@ -382,6 +414,20 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.socket.on('sameName', () => {
       this.connectionError = true;
       this.connectionErrorMsg = 'You are already connected to this lesson from another window.';
+    });
+
+    // Sent by the signaling server when a tutorToken fails verification
+    // — expired, wrong link, tampered signature. Bounce back to the
+    // choice screen so the tutor can log in again without a full reload.
+    this.socket.on('tutorTokenInvalid', () => {
+      this.tutorToken = '';
+      this.isTutor = false;
+      this.tutorLoginError = 'Your tutor session expired. Please log in again.';
+      this.showTutorLoginForm = true;
+      this.awaitingClassroomChoice = true;
+      // Tear down the half-formed connection; performJoin will run
+      // again from the choice screen after a fresh login.
+      try { this.socket.close(); } catch { /* ignore */ }
     });
 
     this.socket.on('chat-message', (msg: { displayName: string; avatarUrl: string; text: string; timestamp: number }) => {
@@ -499,6 +545,7 @@ export class ChatComponent implements OnInit, OnDestroy {
             room,
             displayName: this.myDisplayName,
             avatarUrl: this.myAvatarUrl,
+            tutorToken: this.tutorToken || undefined,
           });
         });
 
@@ -522,6 +569,7 @@ export class ChatComponent implements OnInit, OnDestroy {
               room,
               displayName: this.myDisplayName,
               avatarUrl: this.myAvatarUrl,
+              tutorToken: this.tutorToken || undefined,
             });
           }
         });
@@ -760,6 +808,83 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (ev.key === 'Enter') {
       ev.preventDefault();
       this.submitGuestName();
+    }
+  }
+
+  // ── Classroom-choice screen handlers ────────────────────────────
+
+  /** Visitor picked "Join as student" — transition to the existing
+   *  name-entry flow. Nothing else changes; tutorToken stays empty. */
+  chooseStudent(): void {
+    this.awaitingClassroomChoice = false;
+    this.showTutorLoginForm = false;
+    this.awaitingNameEntry = true;
+  }
+
+  /** Visitor picked "I'm a tutor" — reveal the inline login form
+   *  under the choice buttons. Actual submit is submitTutorLogin(). */
+  chooseTutor(): void {
+    this.showTutorLoginForm = true;
+    this.tutorLoginError = '';
+  }
+
+  /** POST /v1/meeting-links/{room}/tutor-login. On success populates
+   *  our identity from the response (server-authoritative) + stashes
+   *  the scoped JWT for the joinRoom emit, then kicks off the deferred
+   *  join. On failure surfaces the error inline; the form stays open. */
+  async submitTutorLogin(): Promise<void> {
+    const email = this.tutorLoginEmail.trim();
+    const password = this.tutorLoginPassword;
+    if (!email || !password || this.tutorLoginSubmitting) return;
+
+    this.tutorLoginError = '';
+    this.tutorLoginSubmitting = true;
+
+    // Room param drives which link we're authenticating against — the
+    // backend endpoint pins the token to this exact link.
+    const parsed = Qs.parse(location.search, { ignoreQueryPrefix: true });
+    const room = parsed['room'] as string;
+    try {
+      const res = await fetch(
+        `${environment.apiUrl}/v1/meeting-links/${room}/tutor-login`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        this.tutorLoginError = body?.message || 'Login failed. Check your credentials.';
+        return;
+      }
+      const data = body?.data;
+      if (!data?.token || !data?.tutor_id) {
+        this.tutorLoginError = 'Unexpected response from server.';
+        return;
+      }
+      // Adopt server-supplied identity — tutor_id, display name,
+      // avatar all come from the token payload, not the URL.
+      this.tutorToken = data.token;
+      this.isTutor = true;
+      this.myUsername = data.tutor_id;
+      this.myDisplayName = data.name || 'Tutor';
+      this.myAvatarUrl = data.image || '';
+
+      this.awaitingClassroomChoice = false;
+      this.showTutorLoginForm = false;
+      this.performJoin();
+    } catch (err) {
+      this.tutorLoginError = 'Network error. Try again in a moment.';
+    } finally {
+      this.tutorLoginSubmitting = false;
+    }
+  }
+
+  onTutorLoginKeydown(ev: KeyboardEvent): void {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      this.submitTutorLogin();
     }
   }
 

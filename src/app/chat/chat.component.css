@@ -1828,6 +1828,56 @@
   margin: 12px 0 0;
 }
 
+/* Classroom-link role choice screen — reuses .meet-prejoin card
+   shell with a few extra variants for the two-CTA layout. */
+.meet-prejoin-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.meet-prejoin-btn--primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.meet-prejoin-btn--ghost {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.meet-prejoin-btn--ghost:hover:not(:disabled) {
+  background: var(--card-hover, rgba(0, 0, 0, 0.04));
+}
+
+.meet-prejoin-btn--link {
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 6px;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.meet-prejoin-btn--link:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.meet-prejoin-error {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 6px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ══════════════════════════════════════════════════════════════
    Screen-share audio confirmation
    Lives on top of the meeting briefly while the user picks audio
