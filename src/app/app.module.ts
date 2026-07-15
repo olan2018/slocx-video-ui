@@ -16,10 +16,16 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { provideFirebaseApp, getApp, initializeApp } from '@angular/fire/app';
 import { getFirestore, provideFirestore } from '@angular/fire/firestore';
 import { SocketIoModule, SocketIoConfig } from 'ngx-socket-io';
+import { environment } from '../environments/environment';
 
 
 
-const config: SocketIoConfig = { url: 'http://localhost:4000', options: {} };
+// Point ngx-socket-io at the same signaling server the rest of the app
+// uses (chat.component.ts also does `io(environment.socketUrl)`).
+// Hardcoded 'http://localhost:4000' was a dev leftover — in prod it
+// hits meet.slocx.com's browser and fails with ERR_CONNECTION_REFUSED,
+// which silently breaks every class-tool sync event.
+const config: SocketIoConfig = { url: environment.socketUrl, options: {} };
 
 
 @NgModule({

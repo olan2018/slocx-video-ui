@@ -203,6 +203,46 @@
   position: relative;
 }
 
+/* Loading + error states shown INSIDE the board host while the lazy
+   Excalidraw chunk is downloading (or if the download fails). Both
+   are absolutely-positioned overlays so Excalidraw can render on top
+   once it's ready and cover them. */
+
+.ct-board__loading,
+.ct-board__error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--ct-text-dim);
+  font-size: 13px;
+  background: #f8fafc;
+  z-index: 1;
+}
+
+.ct-board__error {
+  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.05);
+  flex-direction: row;
+  padding: 20px;
+  text-align: center;
+}
+
+.ct-board__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #cbd5e1;
+  border-top-color: var(--ct-accent);
+  border-radius: 50%;
+  animation: ct-spin 0.8s linear infinite;
+}
+
+@keyframes ct-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── Materials launch button (topbar) ──────────────────────────── */
 
 .ct-materials-btn {

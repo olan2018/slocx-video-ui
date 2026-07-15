@@ -96,7 +96,20 @@
   <div class="ct-body">
 
 
-    <div class="ct-board" #boardHost></div>
+    <div class="ct-board" #boardHost>
+      <div *ngIf="boardMountPending" class="ct-board__loading">
+        <div class="ct-board__spinner" aria-hidden="true"></div>
+        <span>Loading whiteboard…</span>
+      </div>
+      <div *ngIf="boardMountError" class="ct-board__error">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 8v4"></path>
+          <path d="M12 16h.01"></path>
+        </svg>
+        {{ boardMountError }}
+      </div>
+    </div>
 
 
     <div *ngIf="activeMaterial" class="ct-material-viewer">

@@ -82,6 +82,17 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
    *  would kick off dozens of parallel `import()` promises. */
   private mountingBoard = false;
 
+  /** True while the lazy Excalidraw chunk is downloading + mounting.
+   *  Drives the "Loading whiteboard…" overlay so the panel isn't
+   *  visually empty during the ~200ms first-open beat. */
+  boardMountPending = false;
+
+  /** Set if the lazy chunk fails to load (usually a deploy artifact-
+   *  path mismatch or a CSP/adblock block). Shown as an error banner
+   *  inside the board area so the failure is visible instead of just
+   *  leaving a mysterious blank canvas. */
+  boardMountError = '';
+
   /** Sanitized `SafeResourceUrl` for the PDF iframe. Angular's default
    *  sanitizer strips iframe src to prevent XSS; because we trust the
    *  URLs (tutor picked from their own material library — auth-scoped
@@ -131,36 +142,53 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   ngAfterViewChecked(): void {
-    if (this.open && this.boardHost && !this.handle && !this.mountingBoard) {
+    if (this.open && this.boardHost && !this.handle && !this.mountingBoard && !this.boardMountError) {
       this.mountingBoard = true;
+      this.boardMountPending = true;
+      this.cdr.markForCheck();
       // Dynamic import — React + Excalidraw are code-split into their
       // own chunk that only loads on first panel open. Webpack picks
       // this up automatically because the specifier is a static
       // string literal.
-      void import('./excalidraw-mount').then((mod) => {
-        // Guard against a race: user closed the panel while the
-        // chunk was in flight. When they reopen, ngAfterViewChecked
-        // will fire again and retry the mount.
-        if (!this.boardHost || !this.open) {
+      import('./excalidraw-mount')
+        .then((mod) => {
+          // Guard against a race: user closed the panel while the
+          // chunk was in flight. When they reopen, ngAfterViewChecked
+          // will fire again and retry the mount.
+          if (!this.boardHost || !this.open) {
+            this.mountingBoard = false;
+            this.boardMountPending = false;
+            this.cdr.markForCheck();
+            return;
+          }
+          this.handle = mod.mountExcalidraw(this.boardHost.nativeElement, {
+            isTutor: this.isTutor,
+          });
+          this.handle.onLocalChange((elements) => {
+            this.sync.broadcastScene({ elements });
+          });
+          if (this.queuedScene) {
+            this.handle.applyRemoteScene(this.queuedScene);
+            this.queuedScene = null;
+          }
+          // Apply the server-authoritative permission the moment the
+          // board is live — subscription may have fired before mount.
+          if (!this.isTutor) this.handle.setReadOnly(!this.studentCanWrite);
           this.mountingBoard = false;
-          return;
-        }
-        this.handle = mod.mountExcalidraw(this.boardHost.nativeElement, {
-          isTutor: this.isTutor,
+          this.boardMountPending = false;
+          this.cdr.markForCheck();
+        })
+        .catch((err) => {
+          // Chunk fetch failed (network, CSP, deploy path mismatch).
+          // Surface it in the UI + log so we can tell "blank panel"
+          // apart from "empty canvas".
+          console.error('[CLASS-TOOL] Excalidraw chunk failed to load:', err);
+          this.mountingBoard = false;
+          this.boardMountPending = false;
+          this.boardMountError =
+            'Whiteboard failed to load. Check your connection and try again.';
+          this.cdr.markForCheck();
         });
-        this.handle.onLocalChange((elements) => {
-          this.sync.broadcastScene({ elements });
-        });
-        if (this.queuedScene) {
-          this.handle.applyRemoteScene(this.queuedScene);
-          this.queuedScene = null;
-        }
-        // Apply the server-authoritative permission the moment the
-        // board is live — subscription may have fired before mount.
-        if (!this.isTutor) this.handle.setReadOnly(!this.studentCanWrite);
-        this.mountingBoard = false;
-        this.cdr.markForCheck();
-      });
     }
   }
 
