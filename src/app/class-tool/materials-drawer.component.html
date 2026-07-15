@@ -1,0 +1,71 @@
+
+<aside class="mat-drawer" [class.mat-drawer--open]="open" aria-label="Materials">
+
+
+  <header class="mat-drawer__header">
+    <h3 class="mat-drawer__title">Materials</h3>
+    <button type="button" class="mat-drawer__close" (click)="onClose()" title="Close">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6L6 18"></path>
+        <path d="M6 6l12 12"></path>
+      </svg>
+    </button>
+  </header>
+
+
+  <div class="mat-drawer__search">
+    <svg class="mat-drawer__search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="7"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <input
+      type="text"
+      class="mat-drawer__search-input"
+      placeholder="Search by title…"
+      [value]="searchDraft"
+      (input)="onSearchInput($any($event.target).value)" />
+    <button *ngIf="searchDraft" type="button" class="mat-drawer__search-clear" (click)="onClear()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6L6 18"></path>
+        <path d="M6 6l12 12"></path>
+      </svg>
+    </button>
+  </div>
+
+
+  <div *ngIf="!hasAuth" class="mat-drawer__notice">
+    Materials unavailable — tutor session token missing from the meeting URL.
+    Reopen the class from the tutor dashboard.
+  </div>
+
+
+  <div *ngIf="hasAuth" class="mat-drawer__list">
+    <div *ngIf="loading && items.length === 0" class="mat-drawer__loading">Loading…</div>
+
+    <div *ngIf="!loading && items.length === 0" class="mat-drawer__empty">
+      No materials {{ searchDraft ? 'match your search' : 'yet' }}.
+    </div>
+
+    <button *ngFor="let m of items; trackBy: trackById"
+            type="button"
+            class="mat-item"
+            [class.mat-item--active]="m.id === activeMaterialId"
+            (click)="onPick(m)"
+            [title]="'Open ' + m.title + ' for the class'">
+      <span class="mat-item__ext">{{ extBadge(m.url) }}</span>
+      <span class="mat-item__title">{{ m.title }}</span>
+      <span class="mat-item__date">{{ m.createdat | date:'MMM d, y' }}</span>
+    </button>
+  </div>
+
+
+  <footer *ngIf="hasAuth && total > 0" class="mat-drawer__footer">
+    <button type="button" class="mat-drawer__nav" (click)="onPrev()" [disabled]="page <= 1">
+      ← Prev
+    </button>
+    <span class="mat-drawer__page">Page {{ page }} of {{ totalPages }}</span>
+    <button type="button" class="mat-drawer__nav" (click)="onNext()" [disabled]="page >= totalPages">
+      Next →
+    </button>
+  </footer>
+</aside>

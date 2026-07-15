@@ -6,6 +6,9 @@ import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { ChatComponent } from './chat/chat.component';
 import { LandingComponent } from './landing/landing.component';
+import { ClassToolComponent } from './class-tool/class-tool.component';
+import { MaterialsDrawerComponent } from './class-tool/materials-drawer.component';
+import { VocabDrawerComponent } from './class-tool/vocab-drawer.component';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { MatGridListModule } from '@angular/material/grid-list';
 import { MatSidenavModule } from '@angular/material/sidenav';
@@ -20,7 +23,14 @@ const config: SocketIoConfig = { url: 'http://localhost:4000', options: {} };
 
 
 @NgModule({
-  declarations: [AppComponent, ChatComponent, LandingComponent],
+  declarations: [
+    AppComponent,
+    ChatComponent,
+    LandingComponent,
+    ClassToolComponent,
+    MaterialsDrawerComponent,
+    VocabDrawerComponent,
+  ],
   imports: [
     BrowserModule,
     FormsModule,

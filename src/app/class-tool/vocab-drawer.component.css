@@ -1,0 +1,452 @@
+/* Vocab drawer — same slide-in geometry as the materials drawer.
+   Wider (380px vs 340px) because the edit screen shows two-column
+   card lists that get cramped narrower. */
+
+:host {
+  --vc-bg: #ffffff;
+  --vc-border: #e2e8f0;
+  --vc-text: #0f172a;
+  --vc-text-dim: #64748b;
+  --vc-accent: #4f46e5;
+  --vc-accent-hover: #4338ca;
+  --vc-hover: #f8fafc;
+  --vc-active: rgba(79, 70, 229, 0.08);
+  --vc-danger: #ef4444;
+  --vc-danger-bg: rgba(239, 68, 68, 0.08);
+}
+
+.vc-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  max-width: 92vw;
+  background: var(--vc-bg);
+  border-left: 1px solid var(--vc-border);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+  z-index: 5;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.08);
+}
+
+.vc-drawer--open { transform: translateX(0); }
+
+/* Header */
+
+.vc-drawer__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--vc-border);
+  flex-shrink: 0;
+}
+
+.vc-drawer__title {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--vc-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-drawer__back,
+.vc-drawer__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--vc-border);
+  background: #fff;
+  color: var(--vc-text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.vc-drawer__back:hover,
+.vc-drawer__close:hover {
+  background: var(--vc-hover);
+  color: var(--vc-text);
+}
+
+.vc-drawer__notice,
+.vc-drawer__loading,
+.vc-drawer__empty {
+  padding: 20px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--vc-text-dim);
+}
+
+.vc-drawer__notice {
+  margin: 12px;
+  border: 1px dashed var(--vc-border);
+  border-radius: 8px;
+  background: var(--vc-hover);
+}
+
+/* Toolbar (search + New) */
+
+.vc-drawer__toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--vc-border);
+  flex-shrink: 0;
+}
+
+.vc-drawer__search {
+  position: relative;
+  flex: 1;
+}
+
+.vc-drawer__search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--vc-text-dim);
+  pointer-events: none;
+}
+
+.vc-drawer__search-input {
+  width: 100%;
+  padding: 7px 26px 7px 30px;
+  border: 1px solid var(--vc-border);
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  color: var(--vc-text);
+  background: var(--vc-hover);
+}
+
+.vc-drawer__search-input:focus {
+  border-color: var(--vc-accent);
+  background: #fff;
+}
+
+.vc-drawer__search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--vc-text-dim);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.vc-drawer__new {
+  padding: 6px 12px;
+  border: 1px solid var(--vc-accent);
+  background: var(--vc-accent);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.vc-drawer__new:hover {
+  background: var(--vc-accent-hover);
+  border-color: var(--vc-accent-hover);
+}
+
+/* Deck list */
+
+.vc-drawer__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.vc-deck {
+  padding: 10px 12px;
+  margin: 4px 0;
+  border: 1px solid var(--vc-border);
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.vc-deck--active {
+  border-color: rgba(79, 70, 229, 0.45);
+  background: var(--vc-active);
+}
+
+.vc-deck__meta {
+  margin-bottom: 8px;
+}
+
+.vc-deck__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vc-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-deck__desc {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--vc-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vc-deck__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.vc-deck__btn {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border: 1px solid var(--vc-border);
+  background: #fff;
+  color: var(--vc-text);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vc-deck__btn:hover {
+  background: var(--vc-hover);
+}
+
+.vc-deck__btn--primary {
+  flex: 1;
+  background: var(--vc-accent);
+  border-color: var(--vc-accent);
+  color: #fff;
+}
+
+.vc-deck__btn--primary:hover {
+  background: var(--vc-accent-hover);
+  border-color: var(--vc-accent-hover);
+}
+
+.vc-deck__btn--danger {
+  color: var(--vc-danger);
+}
+
+.vc-deck__btn--danger:hover {
+  background: var(--vc-danger-bg);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+/* Footer pagination — shared with list mode only */
+
+.vc-drawer__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-top: 1px solid var(--vc-border);
+  background: var(--vc-hover);
+  flex-shrink: 0;
+}
+
+.vc-drawer__nav {
+  padding: 5px 10px;
+  border: 1px solid var(--vc-border);
+  background: #fff;
+  color: var(--vc-text);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vc-drawer__nav:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vc-drawer__page {
+  font-size: 12px;
+  color: var(--vc-text-dim);
+}
+
+/* ── Create + edit forms ────────────────────────────────────── */
+
+.vc-form {
+  padding: 14px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vc-form--compact {
+  border-top: 1px solid var(--vc-border);
+  background: var(--vc-hover);
+  flex: 0 0 auto;
+  padding: 10px 14px;
+}
+
+.vc-form__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--vc-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-top: 6px;
+}
+
+.vc-form__hint {
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--vc-text-dim);
+  font-size: 10px;
+  margin-left: 4px;
+}
+
+.vc-form__input,
+.vc-form__textarea {
+  padding: 8px 10px;
+  border: 1px solid var(--vc-border);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--vc-text);
+  background: #fff;
+  outline: none;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.vc-form__input:focus,
+.vc-form__textarea:focus {
+  border-color: var(--vc-accent);
+}
+
+.vc-form__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.vc-form__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.vc-form__btn {
+  padding: 7px 14px;
+  border: 1px solid var(--vc-border);
+  background: #fff;
+  color: var(--vc-text);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vc-form__btn:hover {
+  background: var(--vc-hover);
+}
+
+.vc-form__btn--primary {
+  background: var(--vc-accent);
+  border-color: var(--vc-accent);
+  color: #fff;
+}
+
+.vc-form__btn--primary:hover {
+  background: var(--vc-accent-hover);
+  border-color: var(--vc-accent-hover);
+}
+
+.vc-form__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Edit-deck cards list */
+
+.vc-cards {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+
+.vc-card {
+  position: relative;
+  padding: 10px 34px 10px 12px;
+  margin-bottom: 6px;
+  border: 1px solid var(--vc-border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.vc-card__row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.vc-card__front {
+  font-weight: 700;
+  color: var(--vc-text);
+}
+
+.vc-card__arrow {
+  color: var(--vc-text-dim);
+}
+
+.vc-card__back {
+  color: var(--vc-text);
+}
+
+.vc-card__example {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--vc-text-dim);
+  font-style: italic;
+}
+
+.vc-card__delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--vc-text-dim);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.vc-card__delete:hover {
+  color: var(--vc-danger);
+  background: var(--vc-danger-bg);
+}

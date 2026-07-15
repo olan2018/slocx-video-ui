@@ -18,6 +18,11 @@
     "importHelpers": true,
     "target": "ES2022",
     "module": "ES2022",
+    // Excalidraw's shipped .d.ts files reference internal roughjs
+    // types that aren't hoisted to the top level, tripping tsc. Every
+    // Excalidraw integration guide recommends skipLibCheck for this;
+    // it only skips type checks INSIDE .d.ts files, not our own code.
+    "skipLibCheck": true,
     "useDefineForClassFields": false,
     "lib": [
       "ES2022",

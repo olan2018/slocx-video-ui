@@ -1,0 +1,530 @@
+/* Class-tool styles — self-contained; safe to sit at any spot in the
+   meeting DOM. Overlay uses position:fixed so it floats above the
+   video grid regardless of the host layout. */
+
+:host {
+  --ct-bg: #0f172a;
+  --ct-panel: #ffffff;
+  --ct-border: #e2e8f0;
+  --ct-text: #0f172a;
+  --ct-text-dim: #64748b;
+  --ct-accent: #4f46e5;
+  --ct-accent-hover: #4338ca;
+  --ct-success: #10b981;
+  display: contents;
+}
+
+/* ── Launch button — floats bottom-right when panel is closed ─── */
+
+.ct-launch {
+  position: fixed;
+  right: 20px;
+  bottom: 100px;
+  z-index: 9998;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--ct-accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.ct-launch:hover {
+  background: var(--ct-accent-hover);
+  transform: translateY(-1px);
+}
+
+.ct-launch__icon {
+  display: inline-flex;
+}
+
+/* ── Full-screen overlay when open ─────────────────────────────── */
+
+.ct-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--ct-panel);
+  display: flex;
+  flex-direction: column;
+  color: var(--ct-text);
+}
+
+.ct-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--ct-border);
+  flex-shrink: 0;
+}
+
+.ct-topbar__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ct-topbar__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ct-success);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.18);
+}
+
+.ct-topbar__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Toggle — permission grant for the student */
+
+.ct-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: var(--ct-text-dim);
+}
+
+.ct-toggle__input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ct-toggle__track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: #cbd5e1;
+  border-radius: 999px;
+  transition: background 0.15s ease;
+}
+
+.ct-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.ct-toggle--on .ct-toggle__track {
+  background: var(--ct-accent);
+}
+
+.ct-toggle--on .ct-toggle__thumb {
+  transform: translateX(16px);
+}
+
+.ct-toggle--on .ct-toggle__label {
+  color: var(--ct-text);
+  font-weight: 600;
+}
+
+/* Student-side badge showing current permission state — read-only for
+   the student, no action; the toggle itself is tutor-only. */
+
+.ct-perm-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: var(--ct-text-dim);
+  border: 1px solid var(--ct-border);
+}
+
+.ct-perm-badge--on {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+/* Close button */
+
+.ct-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ct-border);
+  background: #fff;
+  color: var(--ct-text-dim);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ct-close:hover {
+  background: #f1f5f9;
+  color: var(--ct-text);
+}
+
+/* Body — flex container so the board fills all remaining height and
+   overlays (material viewer, drawer) sit on top via position:absolute. */
+
+.ct-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+}
+
+/* Board host — where Excalidraw mounts. Fills the body; overlays sit
+   on top. Excalidraw uses width/height:100% internally. */
+
+.ct-board {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* ── Materials launch button (topbar) ──────────────────────────── */
+
+.ct-materials-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--ct-border);
+  background: #fff;
+  color: var(--ct-text);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.ct-materials-btn:hover {
+  background: #f1f5f9;
+}
+
+.ct-materials-btn--on {
+  background: var(--ct-accent);
+  color: #fff;
+  border-color: var(--ct-accent);
+}
+
+/* ── Material viewer (full-cover overlay on top of the board) ──── */
+
+.ct-material-viewer {
+  position: absolute;
+  inset: 0;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  z-index: 3;
+}
+
+.ct-material-viewer__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #fff;
+  border-bottom: 1px solid var(--ct-border);
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.ct-material-viewer__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ct-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.ct-material-viewer__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ct-material-viewer__open {
+  padding: 5px 10px;
+  border: 1px solid var(--ct-border);
+  border-radius: 6px;
+  color: var(--ct-text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  background: #fff;
+}
+
+.ct-material-viewer__open:hover {
+  background: #f1f5f9;
+  color: var(--ct-text);
+}
+
+.ct-material-viewer__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--ct-border);
+  background: #fff;
+  color: var(--ct-text-dim);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ct-material-viewer__close:hover {
+  background: #f1f5f9;
+  color: var(--ct-text);
+}
+
+.ct-material-viewer__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.ct-material-viewer__img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--ct-border);
+  border-radius: 6px;
+}
+
+.ct-material-viewer__iframe {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--ct-border);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.ct-material-viewer__media {
+  width: 100%;
+  max-height: 100%;
+  border-radius: 6px;
+  background: #000;
+}
+
+.ct-material-viewer__fallback {
+  max-width: 420px;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ct-text-dim);
+  line-height: 1.55;
+  background: #fff;
+  border: 1px dashed var(--ct-border);
+  border-radius: 8px;
+}
+
+.ct-material-viewer__fallback a {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--ct-accent);
+  font-weight: 600;
+}
+
+/* ── Vocab presenter — full-cover overlay, same z-index rules ── */
+
+.ct-vocab-viewer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
+  display: flex;
+  flex-direction: column;
+  z-index: 3;
+}
+
+.ct-vocab-viewer__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.85);
+  border-bottom: 1px solid var(--ct-border);
+  backdrop-filter: blur(6px);
+  flex-shrink: 0;
+}
+
+.ct-vocab-viewer__title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.ct-vocab-viewer__deck-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ct-text);
+}
+
+.ct-vocab-viewer__progress {
+  font-size: 11px;
+  color: var(--ct-text-dim);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.ct-vocab-viewer__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.ct-vocab-card {
+  width: 100%;
+  max-width: 640px;
+  min-height: 240px;
+  background: #fff;
+  border: 1px solid var(--ct-border);
+  border-radius: 16px;
+  padding: 40px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.ct-vocab-card--revealed {
+  border-color: rgba(79, 70, 229, 0.35);
+  box-shadow: 0 12px 32px rgba(79, 70, 229, 0.12);
+}
+
+.ct-vocab-card__front {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ct-text);
+  text-align: center;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.ct-vocab-card__reveal {
+  width: 100%;
+  padding-top: 20px;
+  border-top: 1px dashed var(--ct-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ct-vocab-card__back {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--ct-accent);
+  text-align: center;
+  line-height: 1.3;
+}
+
+.ct-vocab-card__example {
+  font-size: 14px;
+  color: var(--ct-text-dim);
+  font-style: italic;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.ct-vocab-card__note {
+  font-size: 12px;
+  color: var(--ct-text-dim);
+  text-align: center;
+  padding: 6px 12px;
+  background: #f1f5f9;
+  border-radius: 999px;
+}
+
+.ct-vocab-viewer__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.85);
+  border-top: 1px solid var(--ct-border);
+  backdrop-filter: blur(6px);
+  flex-shrink: 0;
+}
+
+.ct-vocab-viewer__controls--readonly {
+  color: var(--ct-text-dim);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ct-vocab-viewer__note {
+  font-style: italic;
+}
+
+.ct-vocab-btn {
+  padding: 8px 18px;
+  border: 1px solid var(--ct-border);
+  background: #fff;
+  color: var(--ct-text);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.ct-vocab-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.ct-vocab-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ct-vocab-btn--primary {
+  background: var(--ct-accent);
+  border-color: var(--ct-accent);
+  color: #fff;
+  min-width: 140px;
+}
+
+.ct-vocab-btn--primary:hover:not(:disabled) {
+  background: var(--ct-accent-hover);
+  border-color: var(--ct-accent-hover);
+}

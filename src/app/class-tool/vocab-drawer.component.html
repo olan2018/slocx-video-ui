@@ -1,0 +1,198 @@
+
+<aside class="vc-drawer" [class.vc-drawer--open]="open" aria-label="Vocabulary">
+
+
+  <header class="vc-drawer__header">
+    <button *ngIf="mode !== 'list'"
+            type="button"
+            class="vc-drawer__back"
+            (click)="mode === 'edit' ? onBackToList() : (mode = 'list')"
+            title="Back">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5"></path>
+        <path d="M12 19l-7-7 7-7"></path>
+      </svg>
+    </button>
+
+    <h3 class="vc-drawer__title">
+      <ng-container [ngSwitch]="mode">
+        <span *ngSwitchCase="'list'">Vocabulary</span>
+        <span *ngSwitchCase="'create'">New deck</span>
+        <span *ngSwitchCase="'edit'">{{ editingDeck?.title }}</span>
+      </ng-container>
+    </h3>
+
+    <button type="button" class="vc-drawer__close" (click)="onCloseDrawer()" title="Close">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 6L6 18"></path>
+        <path d="M6 6l12 12"></path>
+      </svg>
+    </button>
+  </header>
+
+
+  <div *ngIf="!hasAuth" class="vc-drawer__notice">
+    Vocab unavailable — tutor session token missing from the meeting URL.
+  </div>
+
+
+  <ng-container *ngIf="hasAuth && mode === 'list'">
+
+    <div class="vc-drawer__toolbar">
+      <div class="vc-drawer__search">
+        <svg class="vc-drawer__search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+          type="text"
+          class="vc-drawer__search-input"
+          placeholder="Search decks…"
+          [value]="searchDraft"
+          (input)="onSearchInput($any($event.target).value)" />
+        <button *ngIf="searchDraft" type="button" class="vc-drawer__search-clear" (click)="onClearSearch()">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6L6 18"></path>
+            <path d="M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <button type="button" class="vc-drawer__new" (click)="onCreateDeckStart()">
+        + New
+      </button>
+    </div>
+
+    <div class="vc-drawer__list">
+      <div *ngIf="loading && decks.length === 0" class="vc-drawer__loading">Loading…</div>
+      <div *ngIf="!loading && decks.length === 0" class="vc-drawer__empty">
+        No decks {{ searchDraft ? 'match your search' : 'yet — create one to start' }}.
+      </div>
+
+      <div *ngFor="let d of decks; trackBy: trackById"
+           class="vc-deck"
+           [class.vc-deck--active]="d.id === activeDeckId">
+        <div class="vc-deck__meta">
+          <div class="vc-deck__title" [title]="d.title">{{ d.title }}</div>
+          <div *ngIf="d.description" class="vc-deck__desc">{{ d.description }}</div>
+        </div>
+        <div class="vc-deck__actions">
+          <button type="button"
+                  class="vc-deck__btn vc-deck__btn--primary"
+                  (click)="onPracticeDeck(d)"
+                  title="Start practice with the class">
+            Practice
+          </button>
+          <button type="button" class="vc-deck__btn" (click)="onEditDeck(d)" title="Edit cards">
+            Edit
+          </button>
+          <button type="button" class="vc-deck__btn vc-deck__btn--danger" (click)="onDeleteDeck(d)" title="Delete deck">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <footer *ngIf="totalDecks > 0" class="vc-drawer__footer">
+      <button type="button" class="vc-drawer__nav" (click)="onPrev()" [disabled]="page <= 1">← Prev</button>
+      <span class="vc-drawer__page">Page {{ page }} of {{ totalPages }}</span>
+      <button type="button" class="vc-drawer__nav" (click)="onNext()" [disabled]="page >= totalPages">Next →</button>
+    </footer>
+  </ng-container>
+
+
+  <ng-container *ngIf="hasAuth && mode === 'create'">
+    <form class="vc-form" (submit)="$event.preventDefault(); onSubmitCreateDeck()">
+      <label class="vc-form__label">Title</label>
+      <input class="vc-form__input"
+             type="text"
+             maxlength="200"
+             placeholder="e.g. Common verbs B1"
+             [(ngModel)]="newDeckTitle"
+             [ngModelOptions]="{ standalone: true }" />
+
+      <label class="vc-form__label">Description <span class="vc-form__hint">(optional)</span></label>
+      <textarea class="vc-form__textarea"
+                maxlength="1000"
+                rows="3"
+                placeholder="What does this deck cover?"
+                [(ngModel)]="newDeckDescription"
+                [ngModelOptions]="{ standalone: true }"></textarea>
+
+      <div class="vc-form__actions">
+        <button type="button" class="vc-form__btn" (click)="onCancelCreateDeck()">Cancel</button>
+        <button type="submit"
+                class="vc-form__btn vc-form__btn--primary"
+                [disabled]="!newDeckTitle.trim() || savingDeck">
+          {{ savingDeck ? 'Saving…' : 'Create deck' }}
+        </button>
+      </div>
+    </form>
+  </ng-container>
+
+
+  <ng-container *ngIf="hasAuth && mode === 'edit' && editingDeck">
+    <div class="vc-cards">
+      <div *ngIf="loadingCards" class="vc-drawer__loading">Loading cards…</div>
+      <div *ngIf="!loadingCards && editingCards.length === 0" class="vc-drawer__empty">
+        No cards yet. Add one below.
+      </div>
+
+      <div *ngFor="let c of editingCards; trackBy: trackById" class="vc-card">
+        <div class="vc-card__row">
+          <span class="vc-card__front">{{ c.front }}</span>
+          <span class="vc-card__arrow">→</span>
+          <span class="vc-card__back">{{ c.back }}</span>
+        </div>
+        <div *ngIf="c.example" class="vc-card__example">{{ c.example }}</div>
+        <button type="button" class="vc-card__delete" (click)="onDeleteCard(c)" title="Delete card">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6L6 18"></path>
+            <path d="M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <form class="vc-form vc-form--compact" (submit)="$event.preventDefault(); onSubmitAddCard()">
+      <div class="vc-form__grid">
+        <div>
+          <label class="vc-form__label">Front</label>
+          <input class="vc-form__input"
+                 type="text"
+                 maxlength="500"
+                 placeholder="Word or phrase"
+                 [(ngModel)]="newCardFront"
+                 [ngModelOptions]="{ standalone: true }" />
+        </div>
+        <div>
+          <label class="vc-form__label">Back</label>
+          <input class="vc-form__input"
+                 type="text"
+                 maxlength="500"
+                 placeholder="Translation / meaning"
+                 [(ngModel)]="newCardBack"
+                 [ngModelOptions]="{ standalone: true }" />
+        </div>
+      </div>
+
+      <label class="vc-form__label">Example <span class="vc-form__hint">(optional)</span></label>
+      <input class="vc-form__input"
+             type="text"
+             maxlength="1000"
+             placeholder="A sentence using the word"
+             [(ngModel)]="newCardExample"
+             [ngModelOptions]="{ standalone: true }" />
+
+      <div class="vc-form__actions">
+        <button type="submit"
+                class="vc-form__btn vc-form__btn--primary"
+                [disabled]="!newCardFront.trim() || !newCardBack.trim() || savingCard">
+          {{ savingCard ? 'Adding…' : '+ Add card' }}
+        </button>
+      </div>
+    </form>
+  </ng-container>
+</aside>

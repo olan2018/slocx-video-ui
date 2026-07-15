@@ -466,19 +466,22 @@ export class ChatComponent implements OnInit, OnDestroy {
       .catch(() => null)
       .then((data: any) => {
         const cfIce = data?.iceServers;
+        // TURN via Cloudflare is the ONLY relay path — the old
+        // environment.turnUrl fallback pointed at turn.slocx.com which
+        // has no real TURN server behind it. If Cloudflare creds
+        // don't reach us, log LOUD instead of silently falling back
+        // to a broken config; users behind symmetric NAT will fail
+        // to connect and we want that visible in Sentry / console.
+        if (!cfIce) {
+          console.error('[TURN] No Cloudflare TURN credentials returned by /v1/turn/credentials — users behind symmetric NAT will fail to connect');
+        }
         const iceServers: any[] = [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' },
-          cfIce ?? {
-            urls: [
-              `turn:${environment.turnUrl}:3478`,
-              `turn:${environment.turnUrl}:3478?transport=tcp`,
-              `turns:${environment.turnUrl}:5349`,
-            ],
-            username: environment.turnUsername,
-            credential: environment.turnCredential,
-          },
         ];
+        if (cfIce) {
+          iceServers.push(cfIce);
+        }
 
         this.myPeer = new Peer('', {
           host: environment.peerHost,

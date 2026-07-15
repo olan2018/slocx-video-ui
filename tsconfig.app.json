@@ -3,12 +3,19 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./out-tsc/app",
-    "types": []
+    "types": [],
+    // Enable JSX so the class-tool React bridge (.tsx files) compiles.
+    // Scoped to the app build config — the base tsconfig stays JSX-free
+    // so Angular-only files aren't affected.
+    "jsx": "react",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
   },
   "files": [
     "src/main.ts"
   ],
   "include": [
-    "src/**/*.d.ts"
+    "src/**/*.d.ts",
+    "src/**/*.tsx"
   ]
 }

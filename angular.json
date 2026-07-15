@@ -20,6 +20,12 @@
               "zone.js"
             ],
             "tsConfig": "tsconfig.app.json",
+            "allowedCommonJsDependencies": [
+              "react-dom/client",
+              "react-dom",
+              "react",
+              "@excalidraw/excalidraw"
+            ],
             "assets": [
               "src/favicon.ico",
               "src/assets"
