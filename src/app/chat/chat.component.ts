@@ -10,6 +10,7 @@ import { io } from 'socket.io-client';
 import * as Qs from 'qs';
 import { environment } from '../../environments/environment';
 import { ClassToolComponent, ClassToolPanelKind } from '../class-tool/class-tool.component';
+import { TutorTokenService } from '../class-tool/tutor-token.service';
 
 export interface ChatMessage {
   displayName: string;
@@ -314,7 +315,7 @@ export class ChatComponent implements OnInit, OnDestroy {
   myAvatarUrl: string = '';
   private peerProfiles: Map<string, { name: string; avatar: string }> = new Map();
 
-  constructor() {}
+  constructor(private tutorTokens: TutorTokenService) {}
 
   ngOnInit(): void {
     // Load saved theme
@@ -883,6 +884,11 @@ export class ChatComponent implements OnInit, OnDestroy {
       // Adopt server-supplied identity — tutor_id, display name,
       // avatar all come from the token payload, not the URL.
       this.tutorToken = data.token;
+      // Publish to the shared token store so MaterialsService and
+      // VocabService can authenticate their calls. Without this,
+      // the materials/vocab drawers stay in the "unavailable"
+      // notice state even after a successful classroom login.
+      this.tutorTokens.setToken(data.token);
       this.isTutor = true;
       this.myUsername = data.tutor_id;
       this.myDisplayName = data.name || 'Tutor';

@@ -52,7 +52,6 @@ export class MaterialsDrawerComponent implements OnChanges {
   total = 0;
   page = 1;
   loading = false;
-  hasAuth: boolean;
 
   searchDraft = '';
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -60,8 +59,13 @@ export class MaterialsDrawerComponent implements OnChanges {
   constructor(
     private materials: MaterialsService,
     private cdr: ChangeDetectorRef,
-  ) {
-    this.hasAuth = materials.hasAuth;
+  ) {}
+
+  /** Getter (not a cached field) so a token that arrives via a
+   *  classroom login AFTER this component was constructed still
+   *  flips the drawer out of its "unavailable" state on next open. */
+  get hasAuth(): boolean {
+    return this.materials.hasAuth;
   }
 
   ngOnChanges(changes: SimpleChanges): void {

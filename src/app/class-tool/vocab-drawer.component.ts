@@ -53,7 +53,13 @@ export class VocabDrawerComponent implements OnChanges {
   @Output() close = new EventEmitter<void>();
 
   mode: Mode = 'list';
-  hasAuth: boolean;
+
+  /** Getter (not a cached field) so a token from a post-construction
+   *  classroom login flips the drawer out of the "unavailable" state
+   *  on next open. */
+  get hasAuth(): boolean {
+    return this.vocab.hasAuth;
+  }
 
   // List state
   decks: VocabDeck[] = [];
@@ -81,9 +87,7 @@ export class VocabDrawerComponent implements OnChanges {
   constructor(
     private vocab: VocabService,
     private cdr: ChangeDetectorRef,
-  ) {
-    this.hasAuth = vocab.hasAuth;
-  }
+  ) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (

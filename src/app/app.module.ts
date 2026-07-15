@@ -9,6 +9,7 @@ import { LandingComponent } from './landing/landing.component';
 import { ClassToolComponent } from './class-tool/class-tool.component';
 import { MaterialsDrawerComponent } from './class-tool/materials-drawer.component';
 import { VocabDrawerComponent } from './class-tool/vocab-drawer.component';
+import { DraggableDirective } from './class-tool/draggable.directive';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { MatGridListModule } from '@angular/material/grid-list';
 import { MatSidenavModule } from '@angular/material/sidenav';
@@ -36,6 +37,7 @@ const config: SocketIoConfig = { url: environment.socketUrl, options: {} };
     ClassToolComponent,
     MaterialsDrawerComponent,
     VocabDrawerComponent,
+    DraggableDirective,
   ],
   imports: [
     BrowserModule,

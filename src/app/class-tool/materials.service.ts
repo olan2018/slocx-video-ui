@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { environment } from '../../environments/environment';
+import { TutorTokenService } from './tutor-token.service';
 
 // ═══════════════════════════════════════════════════════════════════
 // MaterialsService
@@ -37,17 +38,19 @@ export interface MaterialsPage {
 
 @Injectable({ providedIn: 'root' })
 export class MaterialsService {
-  private token: string | null = readTokenFromUrl();
+  constructor(private auth: TutorTokenService) {}
 
   /** True when we know we have no way to reach the endpoint. UI uses
    *  this to render an "auth missing" state instead of a spinner
-   *  that will never resolve. */
+   *  that will never resolve. Read each time — the classroom login
+   *  flow sets the token AFTER the service was constructed. */
   get hasAuth(): boolean {
-    return !!this.token;
+    return this.auth.hasToken();
   }
 
   async list(page: number, limit: number, search: string): Promise<MaterialsPage> {
-    if (!this.token) {
+    const token = this.auth.getToken();
+    if (!token) {
       return { data: [], total: 0, page, limit };
     }
     const qs = new URLSearchParams({
@@ -59,7 +62,7 @@ export class MaterialsService {
 
     const res = await fetch(
       `${environment.apiUrl}/v1/tutor/me/materials?${qs.toString()}`,
-      { headers: { Authorization: `Bearer ${this.token}` } },
+      { headers: { Authorization: `Bearer ${token}` } },
     );
     if (!res.ok) {
       // 401 or 5xx — surface an empty page. The drawer's error banner
@@ -71,17 +74,5 @@ export class MaterialsService {
     const body = await res.json();
     // Envelope: { status, data: { data, total, page, limit } }
     return body?.data as MaterialsPage;
-  }
-}
-
-// Read `?token=...` from the current URL. Cheap enough to run once at
-// service construction — the meeting URL doesn't change during a
-// session, and if it did, the user would reload anyway.
-function readTokenFromUrl(): string | null {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('token');
-  } catch {
-    return null;
   }
 }

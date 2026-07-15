@@ -1,6 +1,7 @@
 
 <div *ngIf="showWhiteboard"
      class="ct-panel ct-panel--whiteboard"
+     appDraggable=".ct-panel__header"
      role="dialog"
      aria-label="Whiteboard">
   <header class="ct-panel__header">
@@ -63,6 +64,7 @@
 
 <div *ngIf="showMaterials"
      class="ct-panel ct-panel--materials"
+     appDraggable=".ct-panel__header"
      role="dialog"
      aria-label="Materials">
   <header class="ct-panel__header">
@@ -148,6 +150,7 @@
 
 <div *ngIf="showVocab"
      class="ct-panel ct-panel--vocab"
+     appDraggable=".ct-panel__header"
      role="dialog"
      aria-label="Vocabulary">
   <header class="ct-panel__header">
