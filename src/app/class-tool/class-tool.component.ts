@@ -11,7 +11,12 @@ import {
 } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { mountExcalidraw, ExcalidrawHandle } from './excalidraw-mount';
+// Type-only import so the class-tool component doesn't pull React +
+// Excalidraw into the initial bundle. The runtime `mountExcalidraw`
+// is loaded lazily via dynamic import in ngAfterViewChecked below —
+// keeps ~1.5MB of React + Excalidraw out of the meeting UI's cold
+// load path for the ~50% of users who never click "Class Tool".
+import type { ExcalidrawHandle } from './excalidraw-mount';
 import {
   ClassToolSyncService,
   ActiveMaterialPayload,
@@ -71,6 +76,12 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   private subs: Subscription[] = [];
   private queuedScene: readonly unknown[] | null = null;
 
+  /** Guard so ngAfterViewChecked doesn't fire the dynamic import a
+   *  second time while the first one is still resolving. AVC runs on
+   *  every change-detection tick — without this, opening the panel
+   *  would kick off dozens of parallel `import()` promises. */
+  private mountingBoard = false;
+
   /** Sanitized `SafeResourceUrl` for the PDF iframe. Angular's default
    *  sanitizer strips iframe src to prevent XSS; because we trust the
    *  URLs (tutor picked from their own material library — auth-scoped
@@ -120,20 +131,36 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   ngAfterViewChecked(): void {
-    if (this.open && this.boardHost && !this.handle) {
-      this.handle = mountExcalidraw(this.boardHost.nativeElement, {
-        isTutor: this.isTutor,
+    if (this.open && this.boardHost && !this.handle && !this.mountingBoard) {
+      this.mountingBoard = true;
+      // Dynamic import — React + Excalidraw are code-split into their
+      // own chunk that only loads on first panel open. Webpack picks
+      // this up automatically because the specifier is a static
+      // string literal.
+      void import('./excalidraw-mount').then((mod) => {
+        // Guard against a race: user closed the panel while the
+        // chunk was in flight. When they reopen, ngAfterViewChecked
+        // will fire again and retry the mount.
+        if (!this.boardHost || !this.open) {
+          this.mountingBoard = false;
+          return;
+        }
+        this.handle = mod.mountExcalidraw(this.boardHost.nativeElement, {
+          isTutor: this.isTutor,
+        });
+        this.handle.onLocalChange((elements) => {
+          this.sync.broadcastScene({ elements });
+        });
+        if (this.queuedScene) {
+          this.handle.applyRemoteScene(this.queuedScene);
+          this.queuedScene = null;
+        }
+        // Apply the server-authoritative permission the moment the
+        // board is live — subscription may have fired before mount.
+        if (!this.isTutor) this.handle.setReadOnly(!this.studentCanWrite);
+        this.mountingBoard = false;
+        this.cdr.markForCheck();
       });
-      this.handle.onLocalChange((elements) => {
-        this.sync.broadcastScene({ elements });
-      });
-      if (this.queuedScene) {
-        this.handle.applyRemoteScene(this.queuedScene);
-        this.queuedScene = null;
-      }
-      // Apply the server-authoritative permission the moment the
-      // board is live — subscription may have fired before mount.
-      if (!this.isTutor) this.handle.setReadOnly(!this.studentCanWrite);
     }
   }
 
