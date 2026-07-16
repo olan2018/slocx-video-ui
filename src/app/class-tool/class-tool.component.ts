@@ -290,41 +290,66 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
       index: 0,
       revealed: false,
     };
+    // Apply locally FIRST so the tutor's UI advances instantly to
+    // the practice card. Then broadcast for the student. Waiting on
+    // the server echo (previous behavior) kept the tutor pinned to
+    // the deck list whenever the tutor-role check on the signaling
+    // server dropped the event.
+    this.applyVocabLocally(payload);
     this.sync.broadcastVocab(payload);
-    // Broadcast triggers vocab$ which flips mode to 'practice'.
   }
 
   vocabPrev(): void {
     if (!this.activeVocab) return;
     if (this.activeVocab.index <= 0) return;
-    this.sync.broadcastVocab({
+    const next: ActiveVocabPayload = {
       ...this.activeVocab,
       index: this.activeVocab.index - 1,
       revealed: false,
-    });
+    };
+    this.applyVocabLocally(next);
+    this.sync.broadcastVocab(next);
   }
 
   vocabNext(): void {
     if (!this.activeVocab) return;
     if (this.activeVocab.index >= this.activeVocab.cards.length - 1) return;
-    this.sync.broadcastVocab({
+    const next: ActiveVocabPayload = {
       ...this.activeVocab,
       index: this.activeVocab.index + 1,
       revealed: false,
-    });
+    };
+    this.applyVocabLocally(next);
+    this.sync.broadcastVocab(next);
   }
 
   vocabToggleReveal(): void {
     if (!this.activeVocab) return;
-    this.sync.broadcastVocab({
+    const next: ActiveVocabPayload = {
       ...this.activeVocab,
       revealed: !this.activeVocab.revealed,
-    });
+    };
+    this.applyVocabLocally(next);
+    this.sync.broadcastVocab(next);
   }
 
   closeActiveVocab(): void {
-    this.sync.broadcastCloseVocab();
+    // Same optimistic pattern — clear our own state up front, then
+    // broadcast the close to the room.
+    this.activeVocab = null;
     if (this.isTutor) this.vocabMode = 'manage';
+    this.cdr.markForCheck();
+    this.sync.broadcastCloseVocab();
+  }
+
+  /** Local apply of a vocab snapshot. Mirrors what the vocab$
+   *  subscription would do on socket echo — but runs synchronously
+   *  so the tutor's UI never lags behind their own click. */
+  private applyVocabLocally(v: ActiveVocabPayload): void {
+    this.activeVocab = v;
+    this.showVocab = true;
+    this.vocabMode = 'practice';
+    this.cdr.markForCheck();
   }
 
   /** True whenever any tool panel is open. Chat.component reads this

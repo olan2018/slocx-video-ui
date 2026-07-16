@@ -383,69 +383,152 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px;
-  gap: 12px;
+  padding: 24px 20px 16px;
+  gap: 20px;
   align-items: center;
   min-height: 0;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(99, 102, 241, 0.06), transparent 55%),
+    radial-gradient(circle at 90% 100%, rgba(236, 72, 153, 0.05), transparent 55%);
 }
 
 .ct-vocab__meta {
   font-size: 11px;
   color: var(--ct-text-dim);
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 1px;
+  padding: 4px 12px;
+  border: 1px solid var(--ct-border);
+  border-radius: 999px;
+  background: #fff;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   Vocab card — proper "deck" look
+   The card itself is a positioned wrapper; ::before + ::after are
+   two fake cards fanned behind it to sell the "stack" illusion. As
+   the tutor advances (index changes), the whole card gets a fresh
+   fade+slide animation via a keyed re-render (see :not(:empty)
+   trick — actually driven by *ngIf in the template).
+   ═══════════════════════════════════════════════════════════════ */
+
 .ct-vocab-card {
+  position: relative;
   width: 100%;
+  max-width: 480px;
   flex: 1;
-  min-height: 160px;
-  background: #fff;
-  border: 1px solid var(--ct-border);
-  border-radius: 12px;
-  padding: 20px;
+  max-height: 320px;
+  padding: 32px 28px;
+  border-radius: 20px;
+  background:
+    linear-gradient(155deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(79, 70, 229, 0.12);
+  box-shadow:
+    0 20px 40px -18px rgba(79, 70, 229, 0.28),
+    0 4px 12px -4px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
-  transition: border-color 0.2s ease;
+  gap: 18px;
+  transition:
+    transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.2),
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
+  animation: ct-vocab-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
 
-.ct-vocab-card--revealed { border-color: rgba(79, 70, 229, 0.35); }
+/* Fanned "cards behind" — ::before is the deeper one, ::after sits
+   between it and the front. Both are hidden from screen readers
+   because they're purely decorative. */
+.ct-vocab-card::before,
+.ct-vocab-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid rgba(79, 70, 229, 0.12);
+  z-index: -1;
+}
+
+.ct-vocab-card::before {
+  transform: translate(14px, 10px) rotate(3deg);
+  opacity: 0.55;
+  box-shadow: 0 12px 24px -14px rgba(15, 23, 42, 0.2);
+}
+
+.ct-vocab-card::after {
+  transform: translate(7px, 5px) rotate(1.5deg);
+  opacity: 0.8;
+  box-shadow: 0 8px 20px -12px rgba(15, 23, 42, 0.18);
+}
+
+.ct-vocab-card--revealed {
+  border-color: rgba(79, 70, 229, 0.4);
+  background: linear-gradient(155deg, #ffffff 0%, #eef2ff 100%);
+  box-shadow:
+    0 24px 48px -18px rgba(79, 70, 229, 0.4),
+    0 6px 14px -4px rgba(15, 23, 42, 0.1);
+}
 
 .ct-vocab-card__front {
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 34px;
+  font-weight: 800;
   color: var(--ct-text);
   text-align: center;
-  line-height: 1.2;
+  line-height: 1.1;
   word-break: break-word;
+  letter-spacing: -0.02em;
+  /* Subtle gradient text — pretty without being loud. */
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .ct-vocab-card__reveal {
   width: 100%;
-  padding-top: 14px;
-  border-top: 1px dashed var(--ct-border);
+  padding-top: 18px;
+  border-top: 2px dashed rgba(79, 70, 229, 0.25);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  animation: ct-vocab-reveal 0.3s ease-out;
 }
 
 .ct-vocab-card__back {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--ct-accent);
+  font-size: 24px;
+  font-weight: 700;
   text-align: center;
+  line-height: 1.25;
+  background: linear-gradient(135deg, var(--ct-accent) 0%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .ct-vocab-card__example {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--ct-text-dim);
   font-style: italic;
   text-align: center;
+  padding: 6px 14px;
+  background: rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  max-width: 90%;
+}
+
+@keyframes ct-vocab-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ct-vocab-reveal {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .ct-vocab__controls {
