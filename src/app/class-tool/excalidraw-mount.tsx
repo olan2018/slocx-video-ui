@@ -134,6 +134,21 @@ const BoardWrapper: React.FC<WrapperProps> = ({ initialReadOnly, registerHooks }
 export function mountExcalidraw(container: HTMLElement, opts: MountOptions): ExcalidrawHandle {
   const root: Root = createRoot(container);
 
+  // Excalidraw calibrates pointer→canvas coordinates against its
+  // container's bounding rect at mount time. When the surrounding
+  // layout later reflows (e.g. a peer joins, sidebar changes width)
+  // Excalidraw doesn't re-measure on its own, and pointer events
+  // start landing in the wrong place — visually the board looks fine
+  // but drawing "doesn't work". A ResizeObserver on the container +
+  // a dispatched window resize event forces Excalidraw to
+  // recalibrate whenever the panel size actually changes.
+  const resizeObs = new ResizeObserver(() => {
+    // dispatchEvent is what Excalidraw internally listens to; it's a
+    // no-op if the size is unchanged so we don't fight ourselves.
+    window.dispatchEvent(new Event('resize'));
+  });
+  resizeObs.observe(container);
+
   // Wrapper hooks — populated once React finishes its first render.
   // Everything before that goes into pending* slots and is flushed
   // when registerHooks fires.
@@ -183,6 +198,7 @@ export function mountExcalidraw(container: HTMLElement, opts: MountOptions): Exc
     destroy() {
       // The wrapper's own cleanup effect clears any in-flight debounce
       // timer, so root.unmount() is enough on our side.
+      resizeObs.disconnect();
       root.unmount();
     },
   };

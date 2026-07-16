@@ -300,16 +300,22 @@
   max-height: 140px;
 }
 
-/* Local self-view (rendered outside the grid) also shrinks so it
-   doesn't dominate the sidebar. Slides to the top of the sidebar. */
-.meet-main--presenting .meet-video-tile--local {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: var(--meet-presenting-sidebar);
+/* Local PiP (`.meet-pip`, the small self-view) sits absolute at
+   bottom-right by default and overlaps the presenting sidebar. Move
+   it to the top of the sidebar column so it stacks cleanly above the
+   remote tiles.
+   Element is a sibling of .meet-main (inside chat root), so this
+   selector doesn't cascade; it's targeting the pip only when meet-
+   main--presenting is active — chat template gets both. */
+.meet-main--presenting ~ .meet-pip,
+.meet-main--presenting .meet-pip {
+  bottom: auto;
+  top: 24px;
+  right: 24px;
+  width: calc(var(--meet-presenting-sidebar) - 8px);
+  max-width: none;
   aspect-ratio: 16 / 10;
-  max-height: 140px;
-  z-index: 2;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 /* Pinned-local layout is meaningless while a tool is presented —

@@ -257,26 +257,44 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   onPickMaterial(m: Material): void {
-    // Compute the slocx-frontend content-detail URL so the viewer
-    // can iframe the full rich page (title, description, quiz,
-    // related content) instead of just the raw video/image asset.
-    // `?embed=1` is a bypass hint the slocx-frontend AuthGuard can
-    // honor to serve the page publicly — without that bypass the
-    // guard will redirect embedded viewers to login (see notes in
-    // the deploy summary).
     const detailUrl = `${environment.contentsBaseUrl}/materials/${m.id}?embed=1`;
-    this.sync.broadcastOpenMaterial({
+    const payload: ActiveMaterialPayload = {
       id: m.id,
       url: m.url,
       title: m.title,
       detailUrl,
-    });
-    // Broadcast triggers material$ which flips mode to 'view'.
+    };
+    // Optimistic-first: switch our own view immediately. Waiting on
+    // the socket echo (previous behavior) left the tutor stuck on the
+    // drawer forever if the server dropped the broadcast (e.g. because
+    // tutor role wasn't verified server-side). Student side still
+    // learns via the broadcast.
+    this.applyMaterialLocally(payload);
+    this.sync.broadcastOpenMaterial(payload);
   }
 
   closeActiveMaterial(): void {
-    this.sync.broadcastCloseMaterial();
+    // Same optimistic close — clear our own state up front, then
+    // broadcast so student's viewer dismisses too.
+    this.activeMaterial = null;
+    this.activeMaterialSafeUrl = null;
     if (this.isTutor) this.materialsMode = 'browse';
+    this.cdr.markForCheck();
+    this.sync.broadcastCloseMaterial();
+  }
+
+  /** Local apply of a material snapshot. Mirrors what the material$
+   *  subscription would do on socket echo — but runs synchronously so
+   *  the tutor's UI never lags behind their own click. */
+  private applyMaterialLocally(m: ActiveMaterialPayload): void {
+    this.activeMaterial = m;
+    const iframeSrc = m.detailUrl || m.url || '';
+    this.activeMaterialSafeUrl = iframeSrc
+      ? this.sanitizer.bypassSecurityTrustResourceUrl(iframeSrc)
+      : null;
+    this.showMaterials = true;
+    this.materialsMode = 'view';
+    this.cdr.markForCheck();
   }
 
   materialKind(): 'detail' | 'image' | 'pdf' | 'video' | 'audio' | 'other' {
