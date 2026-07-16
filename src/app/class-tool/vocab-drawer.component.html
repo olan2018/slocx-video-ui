@@ -92,6 +92,16 @@
             </svg>
           </button>
         </div>
+
+
+        <div *ngIf="practiceError?.deckId === d.id" class="vc-deck__notice">
+          {{ practiceError!.message }}
+          <button type="button"
+                  class="vc-deck__notice-cta"
+                  (click)="onEditDeck(d)">
+            Add cards
+          </button>
+        </div>
       </div>
     </div>
 

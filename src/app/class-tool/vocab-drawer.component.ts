@@ -139,15 +139,37 @@ export class VocabDrawerComponent implements OnChanges {
     this.loadCards(deck.id);
   }
 
+  /** Inline notice shown next to a deck when Practice failed. Empty
+   *  string = no notice. Keyed by deck id so notices don't smear
+   *  across rows if the tutor tries multiple. */
+  practiceError: { deckId: string; message: string } | null = null;
+
   async onPracticeDeck(deck: VocabDeck): Promise<void> {
+    this.practiceError = null;
     // Cards must be fetched before emitting — the parent needs them
     // to build the socket payload (student has no backend access).
-    const cards = await this.vocab.listCards(deck.id);
+    let cards: VocabCard[] = [];
+    try {
+      cards = await this.vocab.listCards(deck.id);
+    } catch (err) {
+      console.error('[VOCAB] listCards threw for', deck.id, err);
+      this.practiceError = {
+        deckId: deck.id,
+        message: 'Could not load cards. Try again.',
+      };
+      this.cdr.markForCheck();
+      return;
+    }
+    console.log('[VOCAB] Practice clicked — deck', deck.id, 'cards fetched:', cards.length);
     if (cards.length === 0) {
-      // Empty decks are useless in practice mode — flip to edit so the
-      // tutor can add cards. No modal / toast; the mode switch is
-      // self-explanatory.
-      this.onEditDeck(deck);
+      // No silent redirect — show an inline prompt so the tutor
+      // knows why nothing happened and can act. Previously we
+      // jumped straight to Edit which looked like "Practice broken".
+      this.practiceError = {
+        deckId: deck.id,
+        message: 'This deck has no cards yet. Add some first.',
+      };
+      this.cdr.markForCheck();
       return;
     }
     this.practice.emit({ deck, cards });

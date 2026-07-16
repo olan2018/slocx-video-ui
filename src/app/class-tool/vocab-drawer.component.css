@@ -255,6 +255,39 @@
   border-color: rgba(239, 68, 68, 0.35);
 }
 
+/* Inline "Practice failed" notice under a deck row. Uses amber
+   rather than red — this is UX guidance, not an error. */
+
+.vc-deck__notice {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #92400e;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vc-deck__notice-cta {
+  padding: 3px 10px;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: #fff;
+  color: #92400e;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.vc-deck__notice-cta:hover {
+  background: rgba(245, 158, 11, 0.15);
+}
+
 /* Footer pagination — shared with list mode only */
 
 .vc-drawer__footer {

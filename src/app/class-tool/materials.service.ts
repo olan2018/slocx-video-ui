@@ -60,12 +60,18 @@ export class MaterialsService {
     const q = search.trim();
     if (q) qs.set('q', q);
 
+    // Source: /me/contents (tutor's video+image content library).
+    // The class-tool drawer is called "Materials" but the underlying
+    // rows come from the `contents` table, not the older per-group-
+    // lesson `materials` table. Backend returns the same {id,url,
+    // title} shape either way so no adapter code is needed here.
+    //
     // NOTE: this backend's protect() reads the Authorization header
     // as-is (no "Bearer " prefix stripping). Sending the standard
     // "Bearer <jwt>" trips the JWT lib's "tokenstring should not
     // contain 'bearer '" check. Matches slocx-frontend's interceptor.
     const res = await fetch(
-      `${environment.apiUrl}/v1/tutor/me/materials?${qs.toString()}`,
+      `${environment.apiUrl}/v1/tutor/me/contents?${qs.toString()}`,
       { headers: { Authorization: token } },
     );
     if (!res.ok) {
