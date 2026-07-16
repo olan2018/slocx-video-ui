@@ -1,6 +1,7 @@
 import {
   Component,
   ElementRef,
+  HostBinding,
   Input,
   ViewChild,
   AfterViewChecked,
@@ -324,6 +325,14 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   closeActiveVocab(): void {
     this.sync.broadcastCloseVocab();
     if (this.isTutor) this.vocabMode = 'manage';
+  }
+
+  /** True whenever any tool panel is open. Chat.component reads this
+   *  via ViewChild to trigger the "presenting" meeting layout where
+   *  video tiles collapse into a right sidebar. Also drives our own
+   *  :host.ct-presenting styles that enlarge the panels. */
+  @HostBinding('class.ct-presenting') get anyToolOpen(): boolean {
+    return this.showWhiteboard || this.showMaterials || this.showVocab;
   }
 
   get currentVocabCard() {

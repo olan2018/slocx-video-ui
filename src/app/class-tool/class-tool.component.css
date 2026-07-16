@@ -67,6 +67,40 @@
   height: min(600px, 75vh);
 }
 
+/* ── Presenting mode ─────────────────────────────────────────
+   Applied by our @HostBinding when any tool panel is open.
+   Panels expand to fill the left area of the meeting UI while
+   the video grid collapses to a right sidebar (see
+   chat.component.css .meet-main--presenting). Panels stay
+   position: fixed so they're still draggable — we just change
+   the default anchor. Once the user drags, inline styles from
+   DraggableDirective take over. */
+
+:host.ct-presenting .ct-panel {
+  top: 90px;
+  left: 24px;
+  right: auto;
+  bottom: 24px;
+  /* Fill the viewport minus topbar (~64px), controls (~90px), the
+     right-side video sidebar (220px), and gutters. */
+  width: calc(100vw - 220px - 60px);
+  height: calc(100vh - 90px - 90px - 24px);
+}
+
+/* Cascade offsets aren't useful in presenting mode — the panels
+   should sit at the same anchor and z-index rules stay so the
+   most-recently-opened is on top. */
+:host.ct-presenting .ct-panel--materials {
+  top: 90px;
+  right: auto;
+  bottom: 24px;
+}
+:host.ct-presenting .ct-panel--vocab {
+  top: 90px;
+  right: auto;
+  bottom: 24px;
+}
+
 /* Header */
 
 .ct-panel__header {

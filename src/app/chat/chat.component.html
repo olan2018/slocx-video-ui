@@ -50,7 +50,9 @@
   </div>
 
   <!-- ══ Main area ════════════════════════════════════════════ -->
-  <div class="meet-main" [class.meet-main--local-pinned]="pinnedPeerId === 'local'">
+  <div class="meet-main"
+       [class.meet-main--local-pinned]="pinnedPeerId === 'local'"
+       [class.meet-main--presenting]="classTool?.anyToolOpen">
 
     <!-- Classroom meeting-link role choice. Shown ONLY for
          ?public=1&kind=classroom links, before the name-entry screen.
@@ -818,4 +820,4 @@
 </div>
 
 
-<app-class-tool [isTutor]="isTutor"></app-class-tool>
+<app-class-tool #classTool [isTutor]="isTutor"></app-class-tool>
