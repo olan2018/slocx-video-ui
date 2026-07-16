@@ -83,6 +83,12 @@ export class ClassToolSyncService implements OnDestroy {
    *  gets the current card immediately. */
   readonly vocab$ = new BehaviorSubject<ActiveVocabPayload | null>(null);
 
+  /** Whether the tutor currently has the whiteboard panel open.
+   *  Students auto-mirror this so opening the board on the tutor
+   *  side becomes visible on the student side without a manual
+   *  Tools-menu click. */
+  readonly boardOpen$ = new BehaviorSubject<boolean>(false);
+
   private subs: Subscription[] = [];
 
   constructor(private socket: Socket) {
@@ -106,6 +112,12 @@ export class ClassToolSyncService implements OnDestroy {
       }),
       this.socket.fromEvent<void>('vocab:close').subscribe(() => {
         this.vocab$.next(null);
+      }),
+      this.socket.fromEvent<void>('board:open').subscribe(() => {
+        this.boardOpen$.next(true);
+      }),
+      this.socket.fromEvent<void>('board:close').subscribe(() => {
+        this.boardOpen$.next(false);
       }),
     );
   }
@@ -142,6 +154,16 @@ export class ClassToolSyncService implements OnDestroy {
   /** Tutor ends the practice session. */
   broadcastCloseVocab(): void {
     this.socket.emit('vocab:close');
+  }
+
+  /** Tutor opened the whiteboard panel — student sees it auto-open. */
+  broadcastBoardOpen(): void {
+    this.socket.emit('board:open');
+  }
+
+  /** Tutor closed the whiteboard panel — student's panel closes too. */
+  broadcastBoardClose(): void {
+    this.socket.emit('board:close');
   }
 
   ngOnDestroy(): void {

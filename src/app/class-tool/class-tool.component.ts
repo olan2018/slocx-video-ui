@@ -94,6 +94,23 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
       this.sync.scene$.subscribe((payload) => {
         if (this.handle) this.handle.applyRemoteScene(payload.elements);
         else this.queuedScene = payload.elements;
+        // Defensive auto-open on the student side: if a scene arrives
+        // and the whiteboard panel isn't up (e.g. student joined
+        // before the tutor toggled board:open), pop it now. Otherwise
+        // the drawing would silently queue and stay invisible.
+        if (!this.isTutor && !this.showWhiteboard) {
+          this.showWhiteboard = true;
+          this.cdr.markForCheck();
+        }
+      }),
+      this.sync.boardOpen$.subscribe((isOpen) => {
+        // Students mirror the tutor's whiteboard-panel state so
+        // opening the board on the tutor side becomes visible on the
+        // student side without a manual Tools-menu click. Tutor
+        // ignores this (they're the source of truth).
+        if (this.isTutor) return;
+        this.showWhiteboard = isOpen;
+        this.cdr.markForCheck();
       }),
       this.sync.permission$.subscribe((canWrite) => {
         this.studentCanWrite = canWrite;
@@ -183,6 +200,10 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   openTool(kind: ClassToolPanelKind): void {
     if (kind === 'whiteboard') {
       this.showWhiteboard = true;
+      // Tell the room the board is up so the student's panel mirrors.
+      // Broadcast is server-gated on tutor role; no-op for students
+      // (their opening of the board is local-only).
+      if (this.isTutor) this.sync.broadcastBoardOpen();
     } else if (kind === 'materials') {
       // Only tutor can open materials cold. Student sees it only when
       // the tutor picks something (handled in material$ subscription).
@@ -201,6 +222,9 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.showWhiteboard = false;
     // Board tree stays mounted so the drawing survives across close/
     // reopen inside one lesson. destroy() only runs in ngOnDestroy.
+    // Tutor's close is authoritative — the student's panel closes too
+    // via board:close. Student close is local-only.
+    if (this.isTutor) this.sync.broadcastBoardClose();
   }
 
   closeMaterialsPanel(): void {
