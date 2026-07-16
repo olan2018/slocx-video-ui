@@ -108,6 +108,13 @@
     <div *ngIf="materialsMode === 'view' && activeMaterial"
          class="ct-material-viewer"
          [ngSwitch]="materialKind()">
+
+
+      <iframe *ngSwitchCase="'detail'"
+              [src]="activeMaterialSafeUrl"
+              class="ct-material-viewer__iframe"
+              [title]="activeMaterial.title"></iframe>
+
       <img *ngSwitchCase="'image'"
            [src]="activeMaterial.url"
            [alt]="activeMaterial.title"

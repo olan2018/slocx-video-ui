@@ -7,6 +7,10 @@ export const environment = {
   apiUrl: 'https://api.slocx.com',
   socketUrl: 'https://video.slocx.com',
   peerHost: 'peer.slocx.com',
+  // Web frontend base. Class-tool "Materials" opens content by iframing
+  // slocx.com/materials/:id inside the tool popup — this is where that
+  // URL is rooted. Keep in sync with the actual slocx-frontend host.
+  contentsBaseUrl: 'https://slocx.com',
   // TURN — served by Cloudflare via short-lived credentials from
   // `${apiUrl}/v1/turn/credentials`. No standalone TURN URL required
   // in the frontend; the backend proxies + signs everything.

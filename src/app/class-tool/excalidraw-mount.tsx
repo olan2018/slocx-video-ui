@@ -111,7 +111,21 @@ const BoardWrapper: React.FC<WrapperProps> = ({ initialReadOnly, registerHooks }
         saveToActiveFile: false,
       },
     },
-    excalidrawAPI: (api: ExcalidrawApi) => { apiRef.current = api; },
+    excalidrawAPI: (api: ExcalidrawApi) => {
+      apiRef.current = api;
+      // Default to the freedraw (pencil) tool for writers so they can
+      // start drawing immediately without hunting for the pen icon.
+      // Excalidraw's own default is 'selection' which requires an
+      // extra click. Read-only viewers (viewMode on) don't need this.
+      if (!readOnly && api?.setActiveTool) {
+        try {
+          api.setActiveTool({ type: 'freedraw' });
+        } catch {
+          // Older Excalidraw versions don't expose setActiveTool;
+          // silent no-op keeps the mount succeeding.
+        }
+      }
+    },
     onChange: handleChange,
   });
 };

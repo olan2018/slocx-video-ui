@@ -19,6 +19,7 @@ import {
   ActiveVocabPayload,
 } from './class-tool-sync.service';
 import { Material } from './materials.service';
+import { environment } from '../../environments/environment';
 import { VocabDeck, VocabCard } from './vocab.service';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -120,8 +121,13 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
       }),
       this.sync.material$.subscribe((m) => {
         this.activeMaterial = m;
-        this.activeMaterialSafeUrl = m
-          ? this.sanitizer.bypassSecurityTrustResourceUrl(m.url)
+        // Prefer detailUrl (rich page from slocx-frontend) over the
+        // raw asset URL — we iframe whichever is authoritative. When
+        // detailUrl is absent (older broadcasters), fall back to the
+        // raw url which the MIME switch renders as img/video/audio/pdf.
+        const iframeSrc = m?.detailUrl || m?.url || '';
+        this.activeMaterialSafeUrl = iframeSrc
+          ? this.sanitizer.bypassSecurityTrustResourceUrl(iframeSrc)
           : null;
         if (m) {
           // Auto-open + switch panel to view mode so both sides see
@@ -251,7 +257,20 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   onPickMaterial(m: Material): void {
-    this.sync.broadcastOpenMaterial({ id: m.id, url: m.url, title: m.title });
+    // Compute the slocx-frontend content-detail URL so the viewer
+    // can iframe the full rich page (title, description, quiz,
+    // related content) instead of just the raw video/image asset.
+    // `?embed=1` is a bypass hint the slocx-frontend AuthGuard can
+    // honor to serve the page publicly — without that bypass the
+    // guard will redirect embedded viewers to login (see notes in
+    // the deploy summary).
+    const detailUrl = `${environment.contentsBaseUrl}/materials/${m.id}?embed=1`;
+    this.sync.broadcastOpenMaterial({
+      id: m.id,
+      url: m.url,
+      title: m.title,
+      detailUrl,
+    });
     // Broadcast triggers material$ which flips mode to 'view'.
   }
 
@@ -260,7 +279,10 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
     if (this.isTutor) this.materialsMode = 'browse';
   }
 
-  materialKind(): 'image' | 'pdf' | 'video' | 'audio' | 'other' {
+  materialKind(): 'detail' | 'image' | 'pdf' | 'video' | 'audio' | 'other' {
+    // Detail-page URL wins when present — iframe the whole slocx-
+    // frontend content page instead of just the raw asset.
+    if (this.activeMaterial?.detailUrl) return 'detail';
     const url = this.activeMaterial?.url ?? '';
     const clean = url.split('?')[0].toLowerCase();
     if (/\.(jpg|jpeg|png|gif|webp|svg)$/.test(clean)) return 'image';

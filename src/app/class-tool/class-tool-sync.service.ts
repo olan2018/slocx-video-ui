@@ -28,12 +28,17 @@ export interface BoardScenePayload {
 }
 
 /** Currently-open material as relayed by the signaling server. The
- *  URL is authoritative — students render it directly (image/pdf/
- *  video/audio picker in the viewer). */
+ *  URL is the raw asset (image/pdf/video/audio). The optional
+ *  `detailUrl` is the slocx-frontend content-detail page — if
+ *  present the viewer iframes THAT instead of the raw URL, so both
+ *  sides see the same rich page (title, description, quiz, comments)
+ *  as they'd see on the web. Kept optional so older clients that
+ *  don't send it fall back to the direct-asset viewer. */
 export interface ActiveMaterialPayload {
   id: string;
   url: string;
   title: string;
+  detailUrl?: string;
 }
 
 /** Vocab card as broadcast to the room. Inlined into the ActiveVocab
