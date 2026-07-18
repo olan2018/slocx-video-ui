@@ -140,15 +140,36 @@ export function mountExcalidraw(container: HTMLElement, opts: MountOptions): Exc
   // Excalidraw calibrates pointer→canvas coordinates against its
   // container's bounding rect at mount time. When the surrounding
   // layout later reflows (e.g. a peer joins, sidebar changes width)
-  // Excalidraw doesn't re-measure on its own, and pointer events
-  // start landing in the wrong place — visually the board looks fine
-  // but drawing "doesn't work". A ResizeObserver on the container +
-  // a dispatched window resize event forces Excalidraw to
-  // recalibrate whenever the panel size actually changes.
-  const resizeObs = new ResizeObserver(() => {
-    // dispatchEvent is what Excalidraw internally listens to; it's a
-    // no-op if the size is unchanged so we don't fight ourselves.
-    window.dispatchEvent(new Event('resize'));
+  // Excalidraw doesn't re-measure on its own — pointer events start
+  // landing in the wrong place.
+  //
+  // We ping it with a window resize event, BUT:
+  //   1. Gated on actual size change ≥ 2px (ResizeObserver otherwise
+  //      fires on subpixel drift, especially during CSS animations).
+  //   2. Debounced ~250ms so we don't dispatch tens of times per
+  //      second during a drag / animation.
+  //
+  // Both matter because a dispatched window resize triggers EVERY
+  // resize listener in the app (Angular zone.js, PeerJS, WebRTC,
+  // socket.io internals). Uncontrolled dispatches saturate the main
+  // thread and starve the audio pipeline — the previous version
+  // silently killed meeting audio the moment the whiteboard opened.
+  let lastW = -1;
+  let lastH = -1;
+  let resizeDebounce: ReturnType<typeof setTimeout> | null = null;
+  const resizeObs = new ResizeObserver((entries) => {
+    const rect = entries[0]?.contentRect;
+    if (!rect) return;
+    if (Math.abs(rect.width - lastW) < 2 && Math.abs(rect.height - lastH) < 2) {
+      return;
+    }
+    lastW = rect.width;
+    lastH = rect.height;
+    if (resizeDebounce) clearTimeout(resizeDebounce);
+    resizeDebounce = setTimeout(() => {
+      resizeDebounce = null;
+      window.dispatchEvent(new Event('resize'));
+    }, 250);
   });
   resizeObs.observe(container);
 
@@ -208,6 +229,7 @@ export function mountExcalidraw(container: HTMLElement, opts: MountOptions): Exc
       // The wrapper's own cleanup effect clears any in-flight debounce
       // timer, so root.unmount() is enough on our side.
       resizeObs.disconnect();
+      if (resizeDebounce) clearTimeout(resizeDebounce);
       root.unmount();
     },
   };
