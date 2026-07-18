@@ -137,11 +137,11 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
       }),
       this.sync.material$.subscribe((m) => {
         this.activeMaterial = m;
-        // Prefer detailUrl (rich page from slocx-frontend) over the
-        // raw asset URL — we iframe whichever is authoritative. When
-        // detailUrl is absent (older broadcasters), fall back to the
-        // raw url which the MIME switch renders as img/video/audio/pdf.
-        const iframeSrc = m?.detailUrl || m?.url || '';
+        // Sanitize the raw asset URL — used by the PDF iframe path.
+        // detailUrl stays in the payload but isn't rendered until
+        // slocx-frontend supports iframe embedding (see materialKind
+        // notes).
+        const iframeSrc = m?.url || '';
         this.activeMaterialSafeUrl = iframeSrc
           ? this.sanitizer.bypassSecurityTrustResourceUrl(iframeSrc)
           : null;
@@ -320,7 +320,9 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
    *  the tutor's UI never lags behind their own click. */
   private applyMaterialLocally(m: ActiveMaterialPayload): void {
     this.activeMaterial = m;
-    const iframeSrc = m.detailUrl || m.url || '';
+    // See material$ subscription — raw url only for now; detailUrl
+    // is data-only until slocx-frontend allows iframe embedding.
+    const iframeSrc = m.url || '';
     this.activeMaterialSafeUrl = iframeSrc
       ? this.sanitizer.bypassSecurityTrustResourceUrl(iframeSrc)
       : null;
@@ -330,9 +332,14 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   materialKind(): 'detail' | 'image' | 'pdf' | 'video' | 'audio' | 'other' {
-    // Detail-page URL wins when present — iframe the whole slocx-
-    // frontend content page instead of just the raw asset.
-    if (this.activeMaterial?.detailUrl) return 'detail';
+    // NOTE on 'detail': the slocx-frontend content page cannot be
+    // iframed today because AuthGuard redirects embedded viewers to
+    // login and login itself blocks framing — the iframe just goes
+    // blank. Until slocx-frontend adds a `?embed=1` bypass to
+    // AuthGuard, we prefer the raw asset URL and render it inline
+    // (image/video/pdf/audio). detailUrl stays in the payload so a
+    // future flip-of-a-switch re-enables the iframe path without
+    // touching this file.
     const url = this.activeMaterial?.url ?? '';
     const clean = url.split('?')[0].toLowerCase();
     if (/\.(jpg|jpeg|png|gif|webp|svg)$/.test(clean)) return 'image';
