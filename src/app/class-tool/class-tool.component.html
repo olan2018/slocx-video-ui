@@ -16,7 +16,18 @@
     <div class="ct-panel__actions">
 
 
-      <label *ngIf="isTutor"
+      <button *ngIf="isTutor"
+              type="button"
+              class="ct-share-btn"
+              [class.ct-share-btn--on]="isSharedWhiteboard"
+              (click)="toggleShareWhiteboard()"
+              [title]="isSharedWhiteboard ? 'Stop sharing with the class' : 'Share this whiteboard with the class'">
+        <span class="ct-share-btn__dot"></span>
+        {{ isSharedWhiteboard ? 'Sharing' : 'Share' }}
+      </button>
+
+
+      <label *ngIf="isTutor && isSharedWhiteboard"
              class="ct-toggle"
              [class.ct-toggle--on]="studentCanWrite">
         <input type="checkbox"
@@ -85,6 +96,15 @@
               (click)="materialsShowBrowse()"
               title="Back to library">
         ← Browse
+      </button>
+      <button *ngIf="isTutor && activeMaterial"
+              type="button"
+              class="ct-share-btn"
+              [class.ct-share-btn--on]="isSharedMaterials"
+              (click)="toggleShareMaterials()"
+              [title]="isSharedMaterials ? 'Stop sharing this material' : 'Share this material with the class'">
+        <span class="ct-share-btn__dot"></span>
+        {{ isSharedMaterials ? 'Sharing' : 'Share' }}
       </button>
       <button type="button" class="ct-panel__close" (click)="closeMaterialsPanel()" title="Close">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -179,6 +199,15 @@
               (click)="vocabShowManage()"
               title="Back to decks">
         ← Decks
+      </button>
+      <button *ngIf="isTutor && activeVocab"
+              type="button"
+              class="ct-share-btn"
+              [class.ct-share-btn--on]="isSharedVocab"
+              (click)="toggleShareVocab()"
+              [title]="isSharedVocab ? 'Stop sharing this practice' : 'Share this practice with the class'">
+        <span class="ct-share-btn__dot"></span>
+        {{ isSharedVocab ? 'Sharing' : 'Share' }}
       </button>
       <button type="button" class="ct-panel__close" (click)="closeVocabPanel()" title="Close">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

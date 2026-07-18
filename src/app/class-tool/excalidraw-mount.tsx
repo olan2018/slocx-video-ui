@@ -30,6 +30,9 @@ export interface ExcalidrawHandle {
   applyRemoteScene(elements: readonly unknown[]): void;
   /** Register the broadcast callback for local edits. Debounced. */
   onLocalChange(cb: (elements: readonly unknown[]) => void): void;
+  /** Snapshot of current scene. Used by the Share toggle so flipping
+   *  Share ON pushes whatever the tutor already drew privately. */
+  getSceneElements(): readonly unknown[];
   destroy(): void;
 }
 
@@ -194,6 +197,12 @@ export function mountExcalidraw(container: HTMLElement, opts: MountOptions): Exc
     onLocalChange(cb) {
       if (hooks) hooks.setLocalChangeCb(cb);
       else pendingLocalChangeCb = cb;
+    },
+    getSceneElements() {
+      const api = hooks?.getApi();
+      return api && typeof api.getSceneElements === 'function'
+        ? api.getSceneElements()
+        : [];
     },
     destroy() {
       // The wrapper's own cleanup effect clears any in-flight debounce

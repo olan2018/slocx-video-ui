@@ -63,6 +63,18 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   /** Tutor-controlled: is the student allowed to write on the board? */
   studentCanWrite = false;
 
+  // ── Per-tool Share state (tutor side) ─────────────────────────
+  //
+  // Default OFF so the tutor works privately until they explicitly
+  // click Share. All broadcasts on the tutor side are gated on these
+  // flags — students see nothing until Share is on. Toggling ON
+  // pushes the CURRENT state (scene, active material, active vocab)
+  // so the student catches up to where the tutor already is.
+  // Ignored on the student side (they have nothing to share).
+  isSharedWhiteboard = false;
+  isSharedMaterials = false;
+  isSharedVocab = false;
+
   /** Materials panel mode. Tutor toggles between browsing their
    *  library and viewing whatever they've picked; student sees
    *  only "view" and only when a material is active. */
@@ -94,12 +106,16 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   ngOnInit(): void {
     this.subs.push(
       this.sync.scene$.subscribe((payload) => {
-        if (this.handle) this.handle.applyRemoteScene(payload.elements);
-        else this.queuedScene = payload.elements;
-        // Defensive auto-open on the student side: if a scene arrives
-        // and the whiteboard panel isn't up (e.g. student joined
-        // before the tutor toggled board:open), pop it now. Otherwise
-        // the drawing would silently queue and stay invisible.
+        if (this.handle) {
+          this.handle.applyRemoteScene(payload.elements);
+          // Belt-and-braces: the tutor should always be writable
+          // regardless of what a remote scene or a state race
+          // temporarily flipped. Re-affirm on every scene arrival.
+          if (this.isTutor) this.handle.setReadOnly(false);
+        } else {
+          this.queuedScene = payload.elements;
+        }
+        // Defensive auto-open on the student side.
         if (!this.isTutor && !this.showWhiteboard) {
           this.showWhiteboard = true;
           this.cdr.markForCheck();
@@ -174,7 +190,12 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
             isTutor: this.isTutor,
           });
           this.handle.onLocalChange((elements) => {
-            this.sync.broadcastScene({ elements });
+            // Broadcast only when the tutor has explicitly turned
+            // Share ON. Otherwise the tutor is sketching privately
+            // and the student sees nothing.
+            if (this.isSharedWhiteboard) {
+              this.sync.broadcastScene({ elements });
+            }
           });
           if (this.queuedScene) {
             this.handle.applyRemoteScene(this.queuedScene);
@@ -207,10 +228,9 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   openTool(kind: ClassToolPanelKind): void {
     if (kind === 'whiteboard') {
       this.showWhiteboard = true;
-      // Tell the room the board is up so the student's panel mirrors.
-      // Broadcast is server-gated on tutor role; no-op for students
-      // (their opening of the board is local-only).
-      if (this.isTutor) this.sync.broadcastBoardOpen();
+      // No auto-broadcast. Opening is a LOCAL action for the tutor —
+      // the student sees the whiteboard only after the tutor clicks
+      // the Share button in the panel header.
     } else if (kind === 'materials') {
       // Only tutor can open materials cold. Student sees it only when
       // the tutor picks something (handled in material$ subscription).
@@ -227,19 +247,31 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   closeWhiteboardPanel(): void {
     this.showWhiteboard = false;
-    // Board tree stays mounted so the drawing survives across close/
-    // reopen inside one lesson. destroy() only runs in ngOnDestroy.
-    // Tutor's close is authoritative — the student's panel closes too
-    // via board:close. Student close is local-only.
-    if (this.isTutor) this.sync.broadcastBoardClose();
+    // If the tutor closes the panel while sharing, close the
+    // student's panel too and clear the shared flag. Silent close
+    // when not sharing.
+    if (this.isTutor && this.isSharedWhiteboard) {
+      this.sync.broadcastBoardClose();
+      this.isSharedWhiteboard = false;
+    }
   }
 
   closeMaterialsPanel(): void {
     this.showMaterials = false;
+    // Closing the panel while sharing also closes the student's
+    // viewer. Consistent with whiteboard behavior.
+    if (this.isTutor && this.isSharedMaterials) {
+      this.sync.broadcastCloseMaterial();
+      this.isSharedMaterials = false;
+    }
   }
 
   closeVocabPanel(): void {
     this.showVocab = false;
+    if (this.isTutor && this.isSharedVocab) {
+      this.sync.broadcastCloseVocab();
+      this.isSharedVocab = false;
+    }
   }
 
   // ── Whiteboard actions ──────────────────────────────────────
@@ -264,23 +296,23 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
       title: m.title,
       detailUrl,
     };
-    // Optimistic-first: switch our own view immediately. Waiting on
-    // the socket echo (previous behavior) left the tutor stuck on the
-    // drawer forever if the server dropped the broadcast (e.g. because
-    // tutor role wasn't verified server-side). Student side still
-    // learns via the broadcast.
+    // Always apply locally so the tutor sees the material.
     this.applyMaterialLocally(payload);
-    this.sync.broadcastOpenMaterial(payload);
+    // Only broadcast if Share is on.
+    if (this.isSharedMaterials) {
+      this.sync.broadcastOpenMaterial(payload);
+    }
   }
 
   closeActiveMaterial(): void {
-    // Same optimistic close — clear our own state up front, then
-    // broadcast so student's viewer dismisses too.
     this.activeMaterial = null;
     this.activeMaterialSafeUrl = null;
     if (this.isTutor) this.materialsMode = 'browse';
     this.cdr.markForCheck();
-    this.sync.broadcastCloseMaterial();
+    // Only propagate close to the student if we were sharing.
+    if (this.isSharedMaterials) {
+      this.sync.broadcastCloseMaterial();
+    }
   }
 
   /** Local apply of a material snapshot. Mirrors what the material$
@@ -336,7 +368,7 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
     // the deck list whenever the tutor-role check on the signaling
     // server dropped the event.
     this.applyVocabLocally(payload);
-    this.sync.broadcastVocab(payload);
+    if (this.isSharedVocab) this.sync.broadcastVocab(payload);
   }
 
   vocabPrev(): void {
@@ -348,7 +380,7 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
       revealed: false,
     };
     this.applyVocabLocally(next);
-    this.sync.broadcastVocab(next);
+    if (this.isSharedVocab) this.sync.broadcastVocab(next);
   }
 
   vocabNext(): void {
@@ -360,7 +392,7 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
       revealed: false,
     };
     this.applyVocabLocally(next);
-    this.sync.broadcastVocab(next);
+    if (this.isSharedVocab) this.sync.broadcastVocab(next);
   }
 
   vocabToggleReveal(): void {
@@ -370,16 +402,14 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
       revealed: !this.activeVocab.revealed,
     };
     this.applyVocabLocally(next);
-    this.sync.broadcastVocab(next);
+    if (this.isSharedVocab) this.sync.broadcastVocab(next);
   }
 
   closeActiveVocab(): void {
-    // Same optimistic pattern — clear our own state up front, then
-    // broadcast the close to the room.
     this.activeVocab = null;
     if (this.isTutor) this.vocabMode = 'manage';
     this.cdr.markForCheck();
-    this.sync.broadcastCloseVocab();
+    if (this.isSharedVocab) this.sync.broadcastCloseVocab();
   }
 
   /** Local apply of a vocab snapshot. Mirrors what the vocab$
@@ -389,6 +419,50 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.activeVocab = v;
     this.showVocab = true;
     this.vocabMode = 'practice';
+    this.cdr.markForCheck();
+  }
+
+  // ── Share toggles ────────────────────────────────────────────
+  //
+  // Turning Share ON: broadcast "open" + push the current state so
+  // the student catches up. Turning OFF: broadcast "close" so the
+  // student's panel dismisses. All future actions in the tool
+  // broadcast only while the corresponding isShared* is true.
+
+  toggleShareWhiteboard(): void {
+    this.isSharedWhiteboard = !this.isSharedWhiteboard;
+    if (this.isSharedWhiteboard) {
+      this.sync.broadcastBoardOpen();
+      // Push whatever the tutor already drew privately.
+      const elements = this.handle?.getSceneElements() ?? [];
+      if (elements.length > 0) {
+        this.sync.broadcastScene({ elements });
+      }
+      // Ensure we stay writable — belt-and-braces after any state race.
+      this.handle?.setReadOnly(false);
+    } else {
+      this.sync.broadcastBoardClose();
+    }
+    this.cdr.markForCheck();
+  }
+
+  toggleShareMaterials(): void {
+    this.isSharedMaterials = !this.isSharedMaterials;
+    if (this.isSharedMaterials && this.activeMaterial) {
+      this.sync.broadcastOpenMaterial(this.activeMaterial);
+    } else if (!this.isSharedMaterials) {
+      this.sync.broadcastCloseMaterial();
+    }
+    this.cdr.markForCheck();
+  }
+
+  toggleShareVocab(): void {
+    this.isSharedVocab = !this.isSharedVocab;
+    if (this.isSharedVocab && this.activeVocab) {
+      this.sync.broadcastVocab(this.activeVocab);
+    } else if (!this.isSharedVocab) {
+      this.sync.broadcastCloseVocab();
+    }
     this.cdr.markForCheck();
   }
 

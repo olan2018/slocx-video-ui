@@ -181,6 +181,61 @@
 .ct-panel__pill--danger { color: var(--ct-danger); border-color: rgba(239, 68, 68, 0.35); }
 .ct-panel__pill--danger:hover { background: rgba(239, 68, 68, 0.08); }
 
+/* Share toggle — off: neutral pill "Share". On: green pill "Sharing"
+   with a pulsing dot to signal live status. Same button, different
+   visual state so it feels like flipping a switch. */
+
+.ct-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--ct-border);
+  background: #fff;
+  color: var(--ct-text);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ct-share-btn:hover {
+  background: #eef2ff;
+  border-color: var(--ct-accent);
+  color: var(--ct-accent);
+}
+
+.ct-share-btn__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.ct-share-btn--on {
+  background: rgba(16, 185, 129, 0.14);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #047857;
+}
+
+.ct-share-btn--on:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.7);
+  color: #047857;
+}
+
+.ct-share-btn--on .ct-share-btn__dot {
+  background: var(--ct-success);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25);
+  animation: ct-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ct-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25); }
+  50%      { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+}
+
 /* Body */
 
 .ct-panel__body {
