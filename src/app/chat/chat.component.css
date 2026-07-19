@@ -262,26 +262,24 @@
 }
 
 /* ── Presenting mode ─────────────────────────────────────────
-   Applied when any class-tool panel is open. Mirrors the Google
-   Meet "someone is sharing" layout: video tiles collapse into a
-   vertical sidebar on the right, leaving the rest of the main
-   area for the tool. The tool itself is styled from class-tool.
+   Applied when any class-tool panel is open. Google Meet-style
+   layout: video tiles collapse into a vertical strip on the LEFT
+   (small, evenly sized rectangles), whiteboard/material/vocab
+   panel takes the rest. Mobile: strip moves to the bottom.
    ────────────────────────────────────────────────────────────── */
 
-/* Width the sidebar reserves for video thumbnails. Also referenced
-   by class-tool's own :host.ct-presenting styles so the tool never
-   overlaps the sidebar. */
 :root { --meet-presenting-sidebar: 220px; }
 
 .meet-main--presenting {
   padding: 12px;
   align-items: stretch;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
-/* Video area shrinks to a fixed-width column on the right and
-   stacks its tiles vertically. All flex-basis / row-wrapping the
-   default grid does is overridden by this narrower context. */
+/* Video grid becomes a fixed-width vertical column on the LEFT.
+   Tiles stack top-to-bottom with a uniform aspect ratio so any
+   number of participants ends up evenly spaced without one big
+   tile dominating. */
 .meet-main--presenting .meet-video-grid {
   width: var(--meet-presenting-sidebar);
   height: 100%;
@@ -290,38 +288,78 @@
   justify-content: flex-start;
   gap: 8px;
   overflow-y: auto;
-  margin-left: auto;
+  margin: 0;
 }
 
+/* Each remote tile: same width as the strip, fixed 16:10 aspect
+   ratio, capped max-height so 8 participants don't produce 8 tiny
+   slivers. flex: 0 0 auto stops the flex parent from stretching
+   them out of shape. */
 .meet-main--presenting :host ::ng-deep .meet-video-tile {
   flex: 0 0 auto;
   width: 100%;
   aspect-ratio: 16 / 10;
-  max-height: 140px;
+  max-height: 160px;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
-/* Local PiP (`.meet-pip`, the small self-view) sits absolute at
-   bottom-right by default and overlaps the presenting sidebar. Move
-   it to the top of the sidebar column so it stacks cleanly above the
-   remote tiles.
-   Element is a sibling of .meet-main (inside chat root), so this
-   selector doesn't cascade; it's targeting the pip only when meet-
-   main--presenting is active — chat template gets both. */
+/* Local PiP (`.meet-pip`) — sits at the TOP of the left sidebar
+   column so the tutor sees themselves at a glance while presenting. */
 .meet-main--presenting ~ .meet-pip,
 .meet-main--presenting .meet-pip {
+  top: 90px;
+  left: 24px;
+  right: auto;
   bottom: auto;
-  top: 24px;
-  right: 24px;
   width: calc(var(--meet-presenting-sidebar) - 8px);
   max-width: none;
   aspect-ratio: 16 / 10;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
-/* Pinned-local layout is meaningless while a tool is presented —
-   collapse it back to the sidebar treatment. */
 .meet-main--presenting.meet-main--local-pinned .meet-video-tile--local {
   transform: none;
+}
+
+/* ── Mobile layout ──────────────────────────────────────────
+   Under 720px the left sidebar is too much horizontal steal.
+   Move video tiles to a horizontal strip along the BOTTOM of
+   the main area, right above the action controls; panels go
+   full-width. */
+@media (max-width: 720px) {
+  :root { --meet-presenting-sidebar: 100%; }
+
+  .meet-main--presenting {
+    flex-direction: column-reverse;
+    padding: 6px;
+  }
+
+  .meet-main--presenting .meet-video-grid {
+    width: 100%;
+    height: auto;
+    max-height: 96px;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px;
+  }
+
+  .meet-main--presenting :host ::ng-deep .meet-video-tile {
+    flex: 0 0 auto;
+    width: 128px;
+    height: 80px;
+    max-height: none;
+    aspect-ratio: auto;
+  }
+
+  .meet-main--presenting ~ .meet-pip,
+  .meet-main--presenting .meet-pip {
+    top: 60px;
+    left: 12px;
+    width: 96px;
+    aspect-ratio: 16 / 10;
+  }
 }
 
 /* ── State screens ───────────────────────────────────────── */

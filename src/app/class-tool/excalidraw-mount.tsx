@@ -66,6 +66,13 @@ const BoardWrapper: React.FC<WrapperProps> = ({ initialReadOnly, registerHooks }
   const localChangeCbRef = React.useRef<((elements: readonly unknown[]) => void) | null>(null);
   const debounceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingElementsRef = React.useRef<readonly unknown[] | null>(null);
+  // Set to true after the initial `setActiveTool(freedraw)` has run.
+  // Excalidraw's excalidrawAPI callback fires on every internal
+  // re-render (not just first mount). Without this guard, every re-
+  // render was calling setActiveTool('freedraw') and stomping any
+  // tool the user had just clicked — which looked like "the toolbar
+  // stopped working".
+  const initialToolSetRef = React.useRef<boolean>(false);
 
   React.useEffect(() => {
     registerHooks({
@@ -117,15 +124,17 @@ const BoardWrapper: React.FC<WrapperProps> = ({ initialReadOnly, registerHooks }
     excalidrawAPI: (api: ExcalidrawApi) => {
       apiRef.current = api;
       // Default to the freedraw (pencil) tool for writers so they can
-      // start drawing immediately without hunting for the pen icon.
-      // Excalidraw's own default is 'selection' which requires an
-      // extra click. Read-only viewers (viewMode on) don't need this.
-      if (!readOnly && api?.setActiveTool) {
+      // start drawing without hunting for the pen icon — but ONLY on
+      // the very first API-ready fire. Excalidraw calls this callback
+      // on every internal re-render; if we set the active tool every
+      // time, we clobber whatever the user just clicked in the
+      // toolbar. This is why "tools stop working after first use".
+      if (!readOnly && api?.setActiveTool && !initialToolSetRef.current) {
+        initialToolSetRef.current = true;
         try {
           api.setActiveTool({ type: 'freedraw' });
         } catch {
-          // Older Excalidraw versions don't expose setActiveTool;
-          // silent no-op keeps the mount succeeding.
+          // Older Excalidraw versions don't expose setActiveTool.
         }
       }
     },

@@ -76,29 +76,54 @@
    the default anchor. Once the user drags, inline styles from
    DraggableDirective take over. */
 
+/* Video strip is on the LEFT (see chat.component.css). Panels
+   anchor to the LEFT edge just past the sidebar so the two never
+   overlap. */
 :host.ct-presenting .ct-panel {
   top: 90px;
-  left: 24px;
-  right: auto;
-  bottom: 24px;
-  /* Fill the viewport minus topbar (~64px), controls (~90px), the
-     right-side video sidebar (220px), and gutters. */
-  width: calc(100vw - 220px - 60px);
-  height: calc(100vh - 90px - 90px - 24px);
+  left: calc(220px + 36px); /* sidebar width + gutter */
+  right: 24px;
+  bottom: 100px;
+  width: auto;
+  height: auto;
 }
 
-/* Cascade offsets aren't useful in presenting mode — the panels
-   should sit at the same anchor and z-index rules stay so the
-   most-recently-opened is on top. */
-:host.ct-presenting .ct-panel--materials {
-  top: 90px;
-  right: auto;
-  bottom: 24px;
-}
+:host.ct-presenting .ct-panel--materials,
 :host.ct-presenting .ct-panel--vocab {
   top: 90px;
-  right: auto;
-  bottom: 24px;
+  left: calc(220px + 36px);
+  right: 24px;
+  bottom: 100px;
+  width: auto;
+  height: auto;
+}
+
+/* Mobile — under 720px the sidebar becomes a bottom strip, so
+   the panel spans full width and dodges the strip at the bottom. */
+@media (max-width: 720px) {
+  :host.ct-presenting .ct-panel,
+  :host.ct-presenting .ct-panel--materials,
+  :host.ct-presenting .ct-panel--vocab {
+    top: 60px;
+    left: 8px;
+    right: 8px;
+    bottom: 190px; /* room for video strip + action bar */
+    width: auto;
+    height: auto;
+  }
+
+  /* Compact header on tiny screens so the Share button + close X
+     don't wrap. */
+  .ct-panel__header {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+  .ct-panel__title {
+    font-size: 12px;
+  }
+  .ct-panel__subtitle {
+    display: none;
+  }
 }
 
 /* Header */
