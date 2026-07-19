@@ -195,10 +195,20 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
             isTutor: this.isTutor,
           });
           this.handle.onLocalChange((elements) => {
-            // Broadcast only when the tutor has explicitly turned
-            // Share ON. Otherwise the tutor is sketching privately
-            // and the student sees nothing.
-            if (this.isSharedWhiteboard) {
+            // Tutor broadcasts only when Share is ON — otherwise
+            // they're sketching privately and the student sees
+            // nothing.
+            //
+            // Student broadcasts UNCONDITIONALLY. They can only get
+            // here at all if the tutor already flipped both Share
+            // ON and Student-can-write ON, so gating them further
+            // would just drop their strokes on the floor. Without
+            // this branch the tutor never saw the student's writing.
+            if (this.isTutor) {
+              if (this.isSharedWhiteboard) {
+                this.sync.broadcastScene({ elements });
+              }
+            } else {
               this.sync.broadcastScene({ elements });
             }
           });
