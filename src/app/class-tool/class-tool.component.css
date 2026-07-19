@@ -91,12 +91,13 @@
 :host.ct-presenting .ct-panel,
 :host.ct-presenting .ct-panel--materials,
 :host.ct-presenting .ct-panel--vocab {
-  top: 90px;
-  left: 24px;
-  right: calc(220px + 36px); /* sidebar width + gutter */
-  bottom: 100px;
-  width: auto;
-  height: auto;
+  top: 90px !important;
+  left: 24px !important;
+  right: calc(220px + 36px) !important; /* 220px sidebar + 12px gutter + 24px pad */
+  bottom: 100px !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
 }
 
 /* Mobile — sidebar becomes a bottom strip. Panels span full

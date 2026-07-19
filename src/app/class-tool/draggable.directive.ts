@@ -65,6 +65,14 @@ export class DraggableDirective implements AfterViewInit, OnDestroy {
     const target = e.target as HTMLElement;
     if (target.closest('button, a, input, textarea, select, label')) return;
 
+    // Skip drag entirely when the panel is docked in presenting
+    // mode — .ct-presenting on the class-tool host anchors panels
+    // to fill the left/center of the screen. Setting inline
+    // right:auto / bottom:auto here would collapse the docked panel
+    // to its content width (bug reported as "minimizes to a small
+    // unviewable popup"). Dragging isn't needed while docked.
+    if (this.host.nativeElement.closest('.ct-presenting')) return;
+
     const el = this.host.nativeElement;
     const rect = el.getBoundingClientRect();
     this.startElX = rect.left;

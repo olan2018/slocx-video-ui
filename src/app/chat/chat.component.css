@@ -261,109 +261,10 @@
   background: var(--bg-primary);
 }
 
-/* ── Presenting mode — Google Meet-style ─────────────────────
-   Shared content (whiteboard / material / vocab) takes the
-   center-left; participant tiles stack in a compact strip on
-   the RIGHT (your PiP included, small like the others). Under
-   720px the strip goes to the bottom.
-   ────────────────────────────────────────────────────────────── */
-
-:root { --meet-presenting-sidebar: 220px; }
-
-.meet-main--presenting {
-  padding: 12px;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 12px;
-}
-
-/* Video strip on the RIGHT. Fixed width, column layout, small
-   uniform tiles. `padding-top` reserves the top slot for the PiP,
-   which is a sibling of .meet-main and is absolutely positioned
-   into that slot below. */
-.meet-main--presenting .meet-video-grid {
-  width: var(--meet-presenting-sidebar);
-  height: 100%;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 8px;
-  overflow-y: auto;
-  margin-left: auto;
-  padding-top: 148px; /* PiP height + gap so first tile doesn't overlap */
-}
-
-/* Every remote video tile: uniform 16:10 chip, ~140px tall. Same
-   size regardless of participant count. `:host` MUST be first for
-   Angular Emulated encapsulation to pierce (putting it mid-selector
-   silently no-ops the rule). */
-:host ::ng-deep .meet-main--presenting .meet-video-tile {
-  flex: 0 0 auto;
-  width: 100%;
-  aspect-ratio: 16 / 10;
-  max-height: 140px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #0f172a;
-}
-
-/* Local PiP (self view) — top slot of the right-side strip.
-   Sibling of .meet-main so the general sibling combinator (~) is
-   used to gate on presenting mode. */
-.meet-main--presenting ~ .meet-pip,
-.meet-main--presenting .meet-pip {
-  top: 90px;
-  right: 24px;
-  left: auto;
-  bottom: auto;
-  width: var(--meet-presenting-sidebar);
-  max-width: none;
-  aspect-ratio: 16 / 10;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-  border-radius: 10px;
-}
-
-.meet-main--presenting.meet-main--local-pinned .meet-video-tile--local {
-  transform: none;
-}
-
-/* ── Mobile — strip moves to bottom ────────────────────────── */
-@media (max-width: 720px) {
-  .meet-main--presenting {
-    flex-direction: column-reverse;
-    padding: 6px;
-    gap: 8px;
-  }
-
-  .meet-main--presenting .meet-video-grid {
-    width: 100%;
-    height: auto;
-    max-height: 96px;
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 4px;
-    margin: 0;
-  }
-
-  :host ::ng-deep .meet-main--presenting .meet-video-tile {
-    flex: 0 0 auto;
-    width: 128px;
-    height: 80px;
-    max-height: none;
-    aspect-ratio: auto;
-  }
-
-  .meet-main--presenting ~ .meet-pip,
-  .meet-main--presenting .meet-pip {
-    top: auto;
-    bottom: 110px;
-    right: 12px;
-    left: auto;
-    width: 96px;
-    aspect-ratio: 16 / 10;
-  }
-}
+/* Presenting mode CSS is at the END of this file — see the block
+   right before the closing declarations. It has to come after
+   .meet-main--local-pinned and later .meet-pip rules or those win
+   by source-order specificity ties. */
 
 /* ── State screens ───────────────────────────────────────── */
 .meet-state {
@@ -2342,4 +2243,127 @@
 .meet-ctrl-btn[disabled]:hover {
   background: var(--bg-surface);
   transform: none;
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   PRESENTING MODE — Google Meet-style layout
+   ══════════════════════════════════════════════════════════════
+   Applied via [class.meet-main--presenting] when any class-tool
+   panel is open (Whiteboard / Materials / Vocab). Layout:
+
+     ┌──────────────────────────┬──────────┐
+     │                          │  PiP     │  ← 220px column,
+     │                          ├──────────┤     right-anchored
+     │  Panel                   │ Remote 1 │
+     │  (whiteboard etc.)       ├──────────┤
+     │                          │ Remote 2 │
+     │                          │   ⋮      │
+     └──────────────────────────┴──────────┘
+
+   This block is at the END of the file on purpose. Earlier
+   versions were higher up and were being overridden by
+   later-declared .meet-pip / .meet-main--local-pinned rules
+   (same specificity, source order wins). !important on the
+   pieces most likely to be re-declared makes it robust.
+   ══════════════════════════════════════════════════════════════ */
+
+.meet-main--presenting {
+  padding: 12px !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  flex-direction: row !important;
+}
+
+.meet-main--presenting .meet-video-grid {
+  width: 220px !important;
+  max-width: 220px !important;
+  height: 100% !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  margin-left: auto !important;
+  padding: 160px 4px 4px !important; /* top space for absolute-positioned PiP */
+  flex: 0 0 220px !important;
+}
+
+/* Uniform remote tiles — small chip regardless of participant count. */
+:host ::ng-deep .meet-main--presenting .meet-video-tile {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 16 / 10 !important;
+  max-height: 140px !important;
+  min-height: 0 !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
+  background: #0f172a !important;
+  order: unset !important;
+}
+
+/* Local PiP — top slot of the right column, matches remote tile size. */
+.meet-main--presenting ~ .meet-pip,
+.meet-main--presenting + .meet-pip {
+  top: 90px !important;
+  right: 24px !important;
+  left: auto !important;
+  bottom: auto !important;
+  width: 220px !important;
+  height: auto !important;
+  aspect-ratio: 16 / 10 !important;
+  max-width: none !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  border-radius: 10px;
+  z-index: 6 !important;
+}
+
+.meet-main--presenting.meet-main--local-pinned {
+  flex-direction: row !important;
+}
+.meet-main--presenting.meet-main--local-pinned .meet-video-tile--local {
+  transform: none !important;
+}
+
+/* ── Mobile: strip drops to bottom ─────────────────────────── */
+@media (max-width: 720px) {
+  .meet-main--presenting {
+    flex-direction: column-reverse !important;
+    padding: 6px !important;
+    gap: 6px !important;
+  }
+
+  .meet-main--presenting .meet-video-grid {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: 92px !important;
+    flex-direction: row !important;
+    flex: 0 0 auto !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 4px !important;
+    margin: 0 !important;
+  }
+
+  :host ::ng-deep .meet-main--presenting .meet-video-tile {
+    flex: 0 0 128px !important;
+    width: 128px !important;
+    height: 80px !important;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+  }
+
+  .meet-main--presenting ~ .meet-pip,
+  .meet-main--presenting + .meet-pip {
+    top: auto !important;
+    bottom: 110px !important;
+    right: 8px !important;
+    left: auto !important;
+    width: 96px !important;
+    aspect-ratio: 16 / 10 !important;
+  }
 }
