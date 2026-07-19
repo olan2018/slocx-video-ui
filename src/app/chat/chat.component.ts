@@ -11,6 +11,7 @@ import * as Qs from 'qs';
 import { environment } from '../../environments/environment';
 import { ClassToolComponent, ClassToolPanelKind } from '../class-tool/class-tool.component';
 import { TutorTokenService } from '../class-tool/tutor-token.service';
+import { ClassToolSyncService } from '../class-tool/class-tool-sync.service';
 
 export interface ChatMessage {
   displayName: string;
@@ -315,7 +316,10 @@ export class ChatComponent implements OnInit, OnDestroy {
   myAvatarUrl: string = '';
   private peerProfiles: Map<string, { name: string; avatar: string }> = new Map();
 
-  constructor(private tutorTokens: TutorTokenService) {}
+  constructor(
+    private tutorTokens: TutorTokenService,
+    private classToolSync: ClassToolSyncService,
+  ) {}
 
   ngOnInit(): void {
     // Load saved theme
@@ -408,6 +412,17 @@ export class ChatComponent implements OnInit, OnDestroy {
     const room = parsed['room'] as string;
 
     this.socket = io(environment.socketUrl);
+
+    // Hand the same socket to ClassToolSyncService BEFORE joinRoom
+    // fires. Class-tool broadcasts (board:open, material:open,
+    // vocab:state) must flow through the socket that got tutor
+    // verification on the server side — otherwise the events land on
+    // an anonymous socket with no room-scoped handlers and vanish.
+    this.classToolSync.bindSocket(this.socket as unknown as {
+      emit: (e: string, ...args: unknown[]) => void;
+      on: (e: string, cb: (p: unknown) => void) => void;
+      off?: (e: string, cb: (p: unknown) => void) => void;
+    });
 
     this.socket.on('connect', () => {
       console.log('[SOCKET] connected');
@@ -557,6 +572,15 @@ export class ChatComponent implements OnInit, OnDestroy {
         this.myPeer.on('open', (userPeerId: string) => {
           console.log(`[PEER] open with id: ${userPeerId}`);
           this.myPeerId = userPeerId;
+          // Diagnostic: log tutor role state on join so we can tell
+          // apart "no tutor token was sent" from "token was sent but
+          // server rejected verification". Pairs with share:rejected
+          // logging in ClassToolSyncService.
+          console.log(
+            '[SOCKET] joinRoom — isTutor:', this.isTutor,
+            'tutorTokenSent:', !!this.tutorToken,
+            'username:', username,
+          );
           this.socket.emit('joinRoom', {
             userPeerId,
             username,

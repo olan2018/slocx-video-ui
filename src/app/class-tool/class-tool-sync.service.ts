@@ -1,5 +1,4 @@
 import { Injectable, OnDestroy } from '@angular/core';
-import { Socket } from 'ngx-socket-io';
 import { Subject, Subscription, BehaviorSubject } from 'rxjs';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -7,33 +6,41 @@ import { Subject, Subscription, BehaviorSubject } from 'rxjs';
 //
 // One-per-app socket adapter for the class tool. Every event the
 // server understands has one broadcast method + one Observable so
-// components stay ignorant of ngx-socket-io / event-name strings.
+// components stay ignorant of event-name strings.
 //
-// Reuses the same Socket that chat.component.ts already opens — no
-// separate connection.
+// IMPORTANT — REUSES CHAT'S SOCKET, DOES NOT CREATE ITS OWN.
 //
-// Wire coverage (Phase 2):
-//   board:scene       — full whiteboard scene, tutor or writable student
-//   board:permission  — tutor-only toggle of student write access
+// chat.component.ts creates the app's ONLY socket via
+// `io(environment.socketUrl)`. That socket is what emits joinRoom,
+// gets the tutor role registered server-side, and receives the room's
+// broadcasts. If this service opened its own socket (as it did in an
+// earlier version via ngx-socket-io injection), its socket would
+// never have called joinRoom — so:
 //
-// Phases 3/4 (materials, vocab) will add methods here; the general
-// shape stays "one broadcast per event, one Observable per event".
+//   1. Emits (`board:open`, `material:open`, `vocab:state`) would
+//      hit the server on a socket with no room-scoped handlers →
+//      silently vanish, no logs, no rejection.
+//   2. Subscribes would receive nothing because broadcasts are
+//      scoped to `io.to(roomId)` and this socket never joined.
+//
+// So chat.component calls `bindSocket(socket)` right after it
+// creates the socket. This service holds a reference and does all
+// emit/subscribe through that shared connection.
 // ═══════════════════════════════════════════════════════════════════
 
-/** Payload we send + receive on `board:scene`. Elements-only on
- *  purpose — broadcasting the sender's appState would let their zoom /
- *  pan / cursor fight the peer's local view. */
+/** Minimal shape we need from a socket.io-client Socket. Kept local
+ *  so we don't take a hard dependency on socket.io-client here — the
+ *  chat component passes its live socket in. */
+interface SocketLike {
+  emit(event: string, ...args: unknown[]): void;
+  on(event: string, cb: (payload: unknown) => void): void;
+  off?(event: string, cb: (payload: unknown) => void): void;
+}
+
 export interface BoardScenePayload {
   elements: readonly unknown[];
 }
 
-/** Currently-open material as relayed by the signaling server. The
- *  URL is the raw asset (image/pdf/video/audio). The optional
- *  `detailUrl` is the slocx-frontend content-detail page — if
- *  present the viewer iframes THAT instead of the raw URL, so both
- *  sides see the same rich page (title, description, quiz, comments)
- *  as they'd see on the web. Kept optional so older clients that
- *  don't send it fall back to the direct-asset viewer. */
 export interface ActiveMaterialPayload {
   id: string;
   url: string;
@@ -41,9 +48,6 @@ export interface ActiveMaterialPayload {
   detailUrl?: string;
 }
 
-/** Vocab card as broadcast to the room. Inlined into the ActiveVocab
- *  snapshot so the student can render without a backend fetch (they
- *  have no token). */
 export interface ActiveVocabCard {
   id: string;
   front: string;
@@ -52,10 +56,6 @@ export interface ActiveVocabCard {
   note?: string;
 }
 
-/** Full snapshot of the current vocab practice session. Tutor is the
- *  only writer — every navigate / reveal is a re-broadcast of the
- *  whole snapshot rather than a diff, which keeps the server dumb and
- *  makes late-join replay trivial. */
 export interface ActiveVocabPayload {
   deckId: string;
   deckTitle: string;
@@ -66,112 +66,128 @@ export interface ActiveVocabPayload {
 
 @Injectable({ providedIn: 'root' })
 export class ClassToolSyncService implements OnDestroy {
-  /** Fires whenever the OTHER side broadcasts a board scene, or on join
-   *  when the server replays the cached scene. Consumers apply it to
-   *  their local Excalidraw via the bridge. */
   readonly scene$ = new Subject<BoardScenePayload>();
-
-  /** Current studentCanWrite state. BehaviorSubject so late subscribers
-   *  see the last value (matters for the class-tool component which
-   *  subscribes only after the panel opens). Default false — server
-   *  overrides to true if the tutor already granted access before we
-   *  joined. */
   readonly permission$ = new BehaviorSubject<boolean>(false);
-
-  /** Currently-open material (or null when closed). BehaviorSubject
-   *  same as permission$ — a student who opens the class tool after
-   *  the tutor picked a material still needs to see it. */
   readonly material$ = new BehaviorSubject<ActiveMaterialPayload | null>(null);
-
-  /** Currently-active vocab practice snapshot (or null). Same late-
-   *  subscriber semantics — student opening the tool mid-practice
-   *  gets the current card immediately. */
   readonly vocab$ = new BehaviorSubject<ActiveVocabPayload | null>(null);
-
-  /** Whether the tutor currently has the whiteboard panel open.
-   *  Students auto-mirror this so opening the board on the tutor
-   *  side becomes visible on the student side without a manual
-   *  Tools-menu click. */
   readonly boardOpen$ = new BehaviorSubject<boolean>(false);
+
+  /** Holds the chat-owned socket after bindSocket() is called. Emits
+   *  before this point are dropped (with a diagnostic warn) rather
+   *  than silently disappearing. */
+  private socket: SocketLike | null = null;
+
+  /** Listener functions we registered on the socket — kept so we can
+   *  detach on ngOnDestroy or if bindSocket is called a second time
+   *  (should not happen, but be defensive). */
+  private listeners: Array<{ event: string; cb: (p: unknown) => void }> = [];
 
   private subs: Subscription[] = [];
 
-  constructor(private socket: Socket) {
-    this.subs.push(
-      this.socket.fromEvent<BoardScenePayload>('board:scene').subscribe((p) => {
-        this.scene$.next(p);
-      }),
-      this.socket
-        .fromEvent<{ studentCanWrite: boolean }>('board:permission')
-        .subscribe((p) => {
-          this.permission$.next(!!p.studentCanWrite);
-        }),
-      this.socket.fromEvent<ActiveMaterialPayload>('material:open').subscribe((p) => {
-        this.material$.next(p);
-      }),
-      this.socket.fromEvent<void>('material:close').subscribe(() => {
-        this.material$.next(null);
-      }),
-      this.socket.fromEvent<ActiveVocabPayload>('vocab:state').subscribe((p) => {
-        this.vocab$.next(p);
-      }),
-      this.socket.fromEvent<void>('vocab:close').subscribe(() => {
-        this.vocab$.next(null);
-      }),
-      this.socket.fromEvent<void>('board:open').subscribe(() => {
-        this.boardOpen$.next(true);
-      }),
-      this.socket.fromEvent<void>('board:close').subscribe(() => {
-        this.boardOpen$.next(false);
-      }),
-    );
+  /**
+   * Attach to the socket owned by chat.component. Call ONCE after
+   * `io(environment.socketUrl)` — before or after connect is fine;
+   * socket.io buffers `on` handlers.
+   */
+  bindSocket(socket: SocketLike): void {
+    if (this.socket === socket) return;
+    // If a previous socket was bound (e.g. hot module reload), detach
+    // first to avoid double-firing.
+    this.detach();
+    this.socket = socket;
+
+    this.on('board:scene', (p) => this.scene$.next(p as BoardScenePayload));
+    this.on('board:permission', (p) => {
+      const v = (p as { studentCanWrite?: boolean } | null)?.studentCanWrite;
+      this.permission$.next(!!v);
+    });
+    this.on('material:open', (p) => this.material$.next(p as ActiveMaterialPayload));
+    this.on('material:close', () => this.material$.next(null));
+    this.on('vocab:state', (p) => this.vocab$.next(p as ActiveVocabPayload));
+    this.on('vocab:close', () => this.vocab$.next(null));
+    this.on('board:open', () => this.boardOpen$.next(true));
+    this.on('board:close', () => this.boardOpen$.next(false));
+    this.on('share:rejected', (payload) => {
+      // Loud red console block so it stands out among WebRTC noise.
+      // Fires when the server dropped a tutor-only broadcast because
+      // the sender wasn't in the room's verified tutor set.
+      // eslint-disable-next-line no-console
+      console.error(
+        '%c[CLASS-TOOL] Server rejected your share event',
+        'font-weight:bold;color:#dc2626;background:#fef2f2;padding:2px 6px;border-radius:4px',
+        payload,
+      );
+    });
   }
 
-  /** Broadcast our local scene. Server enforces permission — a student
-   *  without write access has their event silently dropped. */
+  // ── Broadcasts ────────────────────────────────────────────────
+
   broadcastScene(payload: BoardScenePayload): void {
-    this.socket.emit('board:scene', payload);
+    this.emit('board:scene', payload);
   }
 
-  /** Tutor-only. Server drops the event if the sender isn't a tutor. */
   broadcastPermission(studentCanWrite: boolean): void {
-    this.socket.emit('board:permission', { studentCanWrite });
+    this.emit('board:permission', { studentCanWrite });
   }
 
-  /** Tutor picked a material to show. Server caches it (so late
-   *  joiners get it) and relays to everyone. */
   broadcastOpenMaterial(m: ActiveMaterialPayload): void {
-    this.socket.emit('material:open', m);
+    this.emit('material:open', m);
   }
 
-  /** Tutor dismisses the current material. Symmetric with open;
-   *  student's viewer disappears. */
   broadcastCloseMaterial(): void {
-    this.socket.emit('material:close');
+    this.emit('material:close');
   }
 
-  /** Push the full vocab practice snapshot. Server caches + relays.
-   *  Any change (open deck, next/prev card, reveal) is a new snapshot. */
   broadcastVocab(snapshot: ActiveVocabPayload): void {
-    this.socket.emit('vocab:state', snapshot);
+    this.emit('vocab:state', snapshot);
   }
 
-  /** Tutor ends the practice session. */
   broadcastCloseVocab(): void {
-    this.socket.emit('vocab:close');
+    this.emit('vocab:close');
   }
 
-  /** Tutor opened the whiteboard panel — student sees it auto-open. */
   broadcastBoardOpen(): void {
-    this.socket.emit('board:open');
+    this.emit('board:open');
   }
 
-  /** Tutor closed the whiteboard panel — student's panel closes too. */
   broadcastBoardClose(): void {
-    this.socket.emit('board:close');
+    this.emit('board:close');
   }
 
   ngOnDestroy(): void {
+    this.detach();
     this.subs.forEach((s) => s.unsubscribe());
+  }
+
+  // ── Internals ────────────────────────────────────────────────
+
+  private on(event: string, cb: (payload: unknown) => void): void {
+    if (!this.socket) return;
+    this.socket.on(event, cb);
+    this.listeners.push({ event, cb });
+  }
+
+  private emit(event: string, ...args: unknown[]): void {
+    if (!this.socket) {
+      // Loud diagnostic — this used to fail silently and was very
+      // hard to trace. Now it points squarely at chat.component
+      // forgetting to bind the socket.
+      // eslint-disable-next-line no-console
+      console.error(
+        `[CLASS-TOOL] emit ${event} called before bindSocket() — socket not attached. Chat.component must call syncService.bindSocket(this.socket) after opening the socket.`,
+      );
+      return;
+    }
+    this.socket.emit(event, ...args);
+  }
+
+  private detach(): void {
+    if (!this.socket) return;
+    const s = this.socket;
+    for (const { event, cb } of this.listeners) {
+      s.off?.(event, cb);
+    }
+    this.listeners = [];
+    this.socket = null;
   }
 }

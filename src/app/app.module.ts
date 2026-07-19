@@ -16,17 +16,15 @@ import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { provideFirebaseApp, getApp, initializeApp } from '@angular/fire/app';
 import { getFirestore, provideFirestore } from '@angular/fire/firestore';
-import { SocketIoModule, SocketIoConfig } from 'ngx-socket-io';
-import { environment } from '../environments/environment';
 
-
-
-// Point ngx-socket-io at the same signaling server the rest of the app
-// uses (chat.component.ts also does `io(environment.socketUrl)`).
-// Hardcoded 'http://localhost:4000' was a dev leftover — in prod it
-// hits meet.slocx.com's browser and fails with ERR_CONNECTION_REFUSED,
-// which silently breaks every class-tool sync event.
-const config: SocketIoConfig = { url: environment.socketUrl, options: {} };
+// NOTE: ngx-socket-io's SocketIoModule was removed. It was spawning a
+// SECOND socket connection separate from chat.component's `io(...)`
+// socket, and ClassToolSyncService (which used to inject the ngx
+// Socket) emitted class-tool events on THAT socket — which never
+// called joinRoom, so the server saw an anonymous socket and dropped
+// every board:open / material:open / vocab:state silently. The
+// service now takes chat's own socket via bindSocket(); we only ever
+// have one connection.
 
 
 @NgModule({
@@ -58,7 +56,6 @@ const config: SocketIoConfig = { url: environment.socketUrl, options: {} };
         measurementId: 'G-8M7V8KE71S',
       })
     ),
-    SocketIoModule.forRoot(config),
     provideFirestore(() => getFirestore()),
   ],
   providers: [],
