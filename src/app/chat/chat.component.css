@@ -261,11 +261,11 @@
   background: var(--bg-primary);
 }
 
-/* ── Presenting mode ─────────────────────────────────────────
-   Applied when any class-tool panel is open. Google Meet-style
-   layout: video tiles collapse into a vertical strip on the LEFT
-   (small, evenly sized rectangles), whiteboard/material/vocab
-   panel takes the rest. Mobile: strip moves to the bottom.
+/* ── Presenting mode — Google Meet-style ─────────────────────
+   Shared content (whiteboard / material / vocab) takes the
+   center-left; participant tiles stack in a compact strip on
+   the RIGHT (your PiP included, small like the others). Under
+   720px the strip goes to the bottom.
    ────────────────────────────────────────────────────────────── */
 
 :root { --meet-presenting-sidebar: 220px; }
@@ -274,12 +274,13 @@
   padding: 12px;
   align-items: stretch;
   justify-content: flex-start;
+  gap: 12px;
 }
 
-/* Video grid becomes a fixed-width vertical column on the LEFT.
-   Tiles stack top-to-bottom with a uniform aspect ratio so any
-   number of participants ends up evenly spaced without one big
-   tile dominating. */
+/* Video strip on the RIGHT. Fixed width, column layout, small
+   uniform tiles. `padding-top` reserves the top slot for the PiP,
+   which is a sibling of .meet-main and is absolutely positioned
+   into that slot below. */
 .meet-main--presenting .meet-video-grid {
   width: var(--meet-presenting-sidebar);
   height: 100%;
@@ -288,58 +289,50 @@
   justify-content: flex-start;
   gap: 8px;
   overflow-y: auto;
-  margin: 0;
+  margin-left: auto;
+  padding-top: 148px; /* PiP height + gap so first tile doesn't overlap */
 }
 
-/* Each remote tile: same width as the strip, fixed 16:10 aspect
-   ratio, capped max-height. `:host` must be at the start of the
-   selector — putting it mid-selector (which the earlier version
-   did) silently no-ops the whole rule under Emulated encapsulation. */
+/* Every remote video tile: uniform 16:10 chip, ~140px tall. Same
+   size regardless of participant count. `:host` MUST be first for
+   Angular Emulated encapsulation to pierce (putting it mid-selector
+   silently no-ops the rule). */
 :host ::ng-deep .meet-main--presenting .meet-video-tile {
   flex: 0 0 auto;
   width: 100%;
   aspect-ratio: 16 / 10;
-  max-height: 160px;
+  max-height: 140px;
   border-radius: 10px;
   overflow: hidden;
+  background: #0f172a;
 }
 
-/* Local PiP (`.meet-pip`) — sits at the TOP of the left sidebar
-   column so the tutor sees themselves at a glance while presenting.
-   Aligned with .meet-video-grid (which starts at meet-main padding). */
+/* Local PiP (self view) — top slot of the right-side strip.
+   Sibling of .meet-main so the general sibling combinator (~) is
+   used to gate on presenting mode. */
 .meet-main--presenting ~ .meet-pip,
 .meet-main--presenting .meet-pip {
   top: 90px;
-  left: 12px;
-  right: auto;
+  right: 24px;
+  left: auto;
   bottom: auto;
   width: var(--meet-presenting-sidebar);
   max-width: none;
   aspect-ratio: 16 / 10;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-}
-
-/* Push the grid DOWN so it starts below the PiP, keeping them as
-   a single vertical column instead of overlapping. */
-.meet-main--presenting .meet-video-grid {
-  padding-top: 150px; /* PiP height + gap */
+  border-radius: 10px;
 }
 
 .meet-main--presenting.meet-main--local-pinned .meet-video-tile--local {
   transform: none;
 }
 
-/* ── Mobile layout ──────────────────────────────────────────
-   Under 720px the left sidebar is too much horizontal steal.
-   Move video tiles to a horizontal strip along the BOTTOM of
-   the main area, right above the action controls; panels go
-   full-width. */
+/* ── Mobile — strip moves to bottom ────────────────────────── */
 @media (max-width: 720px) {
-  :root { --meet-presenting-sidebar: 100%; }
-
   .meet-main--presenting {
     flex-direction: column-reverse;
     padding: 6px;
+    gap: 8px;
   }
 
   .meet-main--presenting .meet-video-grid {
@@ -350,6 +343,7 @@
     overflow-x: auto;
     overflow-y: hidden;
     padding: 4px;
+    margin: 0;
   }
 
   :host ::ng-deep .meet-main--presenting .meet-video-tile {
@@ -362,8 +356,10 @@
 
   .meet-main--presenting ~ .meet-pip,
   .meet-main--presenting .meet-pip {
-    top: 60px;
-    left: 12px;
+    top: auto;
+    bottom: 110px;
+    right: 12px;
+    left: auto;
     width: 96px;
     aspect-ratio: 16 / 10;
   }

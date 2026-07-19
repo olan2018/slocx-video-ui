@@ -85,30 +85,22 @@
    the default anchor. Once the user drags, inline styles from
    DraggableDirective take over. */
 
-/* Video strip is on the LEFT (see chat.component.css). Panels
-   anchor to the LEFT edge just past the sidebar so the two never
-   overlap. */
-:host.ct-presenting .ct-panel {
-  top: 90px;
-  left: calc(220px + 36px); /* sidebar width + gutter */
-  right: 24px;
-  bottom: 100px;
-  width: auto;
-  height: auto;
-}
-
+/* Video strip is on the RIGHT (Google Meet style). Panels take
+   the left/center, leaving 220px + gutter on the right for the
+   participant column. */
+:host.ct-presenting .ct-panel,
 :host.ct-presenting .ct-panel--materials,
 :host.ct-presenting .ct-panel--vocab {
   top: 90px;
-  left: calc(220px + 36px);
-  right: 24px;
+  left: 24px;
+  right: calc(220px + 36px); /* sidebar width + gutter */
   bottom: 100px;
   width: auto;
   height: auto;
 }
 
-/* Mobile — under 720px the sidebar becomes a bottom strip, so
-   the panel spans full width and dodges the strip at the bottom. */
+/* Mobile — sidebar becomes a bottom strip. Panels span full
+   width above the strip. */
 @media (max-width: 720px) {
   :host.ct-presenting .ct-panel,
   :host.ct-presenting .ct-panel--materials,
@@ -121,8 +113,6 @@
     height: auto;
   }
 
-  /* Compact header on tiny screens so the Share button + close X
-     don't wrap. */
   .ct-panel__header {
     padding: 6px 10px;
     gap: 6px;
