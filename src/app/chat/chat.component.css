@@ -292,10 +292,10 @@
 }
 
 /* Each remote tile: same width as the strip, fixed 16:10 aspect
-   ratio, capped max-height so 8 participants don't produce 8 tiny
-   slivers. flex: 0 0 auto stops the flex parent from stretching
-   them out of shape. */
-.meet-main--presenting :host ::ng-deep .meet-video-tile {
+   ratio, capped max-height. `:host` must be at the start of the
+   selector — putting it mid-selector (which the earlier version
+   did) silently no-ops the whole rule under Emulated encapsulation. */
+:host ::ng-deep .meet-main--presenting .meet-video-tile {
   flex: 0 0 auto;
   width: 100%;
   aspect-ratio: 16 / 10;
@@ -305,17 +305,24 @@
 }
 
 /* Local PiP (`.meet-pip`) — sits at the TOP of the left sidebar
-   column so the tutor sees themselves at a glance while presenting. */
+   column so the tutor sees themselves at a glance while presenting.
+   Aligned with .meet-video-grid (which starts at meet-main padding). */
 .meet-main--presenting ~ .meet-pip,
 .meet-main--presenting .meet-pip {
   top: 90px;
-  left: 24px;
+  left: 12px;
   right: auto;
   bottom: auto;
-  width: calc(var(--meet-presenting-sidebar) - 8px);
+  width: var(--meet-presenting-sidebar);
   max-width: none;
   aspect-ratio: 16 / 10;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* Push the grid DOWN so it starts below the PiP, keeping them as
+   a single vertical column instead of overlapping. */
+.meet-main--presenting .meet-video-grid {
+  padding-top: 150px; /* PiP height + gap */
 }
 
 .meet-main--presenting.meet-main--local-pinned .meet-video-tile--local {
@@ -345,7 +352,7 @@
     padding: 4px;
   }
 
-  .meet-main--presenting :host ::ng-deep .meet-video-tile {
+  :host ::ng-deep .meet-main--presenting .meet-video-tile {
     flex: 0 0 auto;
     width: 128px;
     height: 80px;

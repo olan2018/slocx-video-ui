@@ -1,6 +1,7 @@
 
-<div *ngIf="showWhiteboard"
+<div *ngIf="whiteboardMounted"
      class="ct-panel ct-panel--whiteboard"
+     [class.ct-panel--hidden]="!showWhiteboard"
      appDraggable=".ct-panel__header"
      role="dialog"
      aria-label="Whiteboard">

@@ -61,6 +61,15 @@
   z-index: 9502;
 }
 
+/* Hides the panel WITHOUT unmounting it from the DOM. Used by the
+   whiteboard panel so Excalidraw's React root doesn't get orphaned
+   on close/reopen — Angular's *ngIf destroys the div the React root
+   was attached to, leaving toolbar + canvas rendering into a
+   detached node. `display: none` keeps everything alive. */
+.ct-panel--hidden {
+  display: none !important;
+}
+
 /* Whiteboard panel is a bit larger — canvases benefit from the room. */
 .ct-panel--whiteboard {
   width: min(820px, 92vw);

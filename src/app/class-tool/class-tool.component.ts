@@ -60,6 +60,13 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   showMaterials = false;
   showVocab = false;
 
+  /** True once the whiteboard panel has been opened for the first
+   *  time. From then on the panel stays in the DOM and we hide it
+   *  via CSS instead of *ngIf so Excalidraw's React root doesn't get
+   *  orphaned when the div is destroyed and re-created on toggle.
+   *  Toolbar / drawing state survives close/reopen this way. */
+  whiteboardMounted = false;
+
   /** Tutor-controlled: is the student allowed to write on the board? */
   studentCanWrite = false;
 
@@ -118,16 +125,14 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
         // Defensive auto-open on the student side.
         if (!this.isTutor && !this.showWhiteboard) {
           this.showWhiteboard = true;
+          this.whiteboardMounted = true;
           this.cdr.markForCheck();
         }
       }),
       this.sync.boardOpen$.subscribe((isOpen) => {
-        // Students mirror the tutor's whiteboard-panel state so
-        // opening the board on the tutor side becomes visible on the
-        // student side without a manual Tools-menu click. Tutor
-        // ignores this (they're the source of truth).
         if (this.isTutor) return;
         this.showWhiteboard = isOpen;
+        if (isOpen) this.whiteboardMounted = true;
         this.cdr.markForCheck();
       }),
       this.sync.permission$.subscribe((canWrite) => {
@@ -228,6 +233,7 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   openTool(kind: ClassToolPanelKind): void {
     if (kind === 'whiteboard') {
       this.showWhiteboard = true;
+      this.whiteboardMounted = true;
       // No auto-broadcast. Opening is a LOCAL action for the tutor —
       // the student sees the whiteboard only after the tutor clicks
       // the Share button in the panel header.
