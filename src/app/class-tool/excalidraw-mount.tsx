@@ -26,13 +26,19 @@ export interface ExcalidrawHandle {
   setReadOnly(readOnly: boolean): void;
   /** Apply a scene received from a peer. Echo-safe: we stamp the
    *  incoming scene version as "just applied" so the resulting
-   *  onChange won't re-broadcast the same payload back. */
-  applyRemoteScene(elements: readonly unknown[]): void;
-  /** Register the broadcast callback for local edits. Debounced. */
-  onLocalChange(cb: (elements: readonly unknown[]) => void): void;
-  /** Snapshot of current scene. Used by the Share toggle so flipping
-   *  Share ON pushes whatever the tutor already drew privately. */
+   *  onChange won't re-broadcast the same payload back.
+   *  `files` carries the binary map for embedded images — without
+   *  it, elements referencing images render blank / crash the
+   *  canvas because the fileId points at nothing. */
+  applyRemoteScene(elements: readonly unknown[], files?: unknown): void;
+  /** Register the broadcast callback for local edits. Debounced.
+   *  Callback receives both elements and files so image edits sync. */
+  onLocalChange(cb: (elements: readonly unknown[], files: unknown) => void): void;
+  /** Snapshot of current scene elements. */
   getSceneElements(): readonly unknown[];
+  /** Snapshot of the binary file map (Excalidraw stores image data
+   *  here, keyed by fileId that elements reference). */
+  getFiles(): unknown;
   destroy(): void;
 }
 
@@ -45,7 +51,9 @@ export interface MountOptions {
 interface WrapperHooks {
   setReadOnly: (v: boolean) => void;
   getApi: () => ExcalidrawApi | null;
-  setLocalChangeCb: (cb: (elements: readonly unknown[]) => void) => void;
+  setLocalChangeCb: (
+    cb: (elements: readonly unknown[], files: unknown) => void,
+  ) => void;
   /** Tells the wrapper "we're about to apply this version from remote,
    *  don't treat the resulting onChange as a local edit." */
   markVersionAsApplied: (v: number) => void;
@@ -63,7 +71,9 @@ const BoardWrapper: React.FC<WrapperProps> = ({ initialReadOnly, registerHooks }
   // instead of stale state snapshots.
   const apiRef = React.useRef<ExcalidrawApi | null>(null);
   const lastSeenVersionRef = React.useRef<number>(-1);
-  const localChangeCbRef = React.useRef<((elements: readonly unknown[]) => void) | null>(null);
+  const localChangeCbRef = React.useRef<
+    ((elements: readonly unknown[], files: unknown) => void) | null
+  >(null);
   const debounceTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingElementsRef = React.useRef<readonly unknown[] | null>(null);
   // Set to true after the initial `setActiveTool(freedraw)` has run.
@@ -92,13 +102,7 @@ const BoardWrapper: React.FC<WrapperProps> = ({ initialReadOnly, registerHooks }
   }, []);
 
   const handleChange = React.useCallback((elements: readonly unknown[]) => {
-    // Two reasons to skip broadcast:
-    //   1. Version didn't change → onChange fired for a UI-only reason
-    //      (cursor move, selection). Nothing to send.
-    //   2. Version equals what we just applied from remote →
-    //      applyRemoteScene set lastSeenVersionRef before calling
-    //      updateScene, so the resulting onChange lands here as a
-    //      no-op. Prevents ping-pong.
+    // See comments below on echo suppression + debouncing.
     const version = getSceneVersion(elements as never);
     if (version === lastSeenVersionRef.current) return;
     lastSeenVersionRef.current = version;
@@ -109,7 +113,11 @@ const BoardWrapper: React.FC<WrapperProps> = ({ initialReadOnly, registerHooks }
       const els = pendingElementsRef.current;
       pendingElementsRef.current = null;
       debounceTimerRef.current = null;
-      if (els && localChangeCbRef.current) localChangeCbRef.current(els);
+      if (!els || !localChangeCbRef.current) return;
+      // Pull the files map at broadcast time (not at onChange time)
+      // so image adds/removes since the last broadcast are captured.
+      const files = apiRef.current?.getFiles?.() ?? {};
+      localChangeCbRef.current(els, files);
     }, BROADCAST_DEBOUNCE_MS);
   }, []);
 
@@ -187,26 +195,42 @@ export function mountExcalidraw(container: HTMLElement, opts: MountOptions): Exc
   // when registerHooks fires.
   let hooks: WrapperHooks | null = null;
   let pendingReadOnly: boolean | null = null;
-  let pendingLocalChangeCb: ((elements: readonly unknown[]) => void) | null = null;
+  let pendingLocalChangeCb:
+    | ((elements: readonly unknown[], files: unknown) => void)
+    | null = null;
   let pendingRemoteScene: readonly unknown[] | null = null;
+  let pendingRemoteFiles: unknown | null = null;
 
-  const applyRemote = (elements: readonly unknown[]) => {
+  const applyRemote = (elements: readonly unknown[], files?: unknown) => {
     if (!hooks) {
       pendingRemoteScene = elements;
+      pendingRemoteFiles = files ?? null;
       return;
     }
-    // Stamp version BEFORE updateScene — the onChange that fires as a
-    // result of updateScene will see it and skip broadcasting.
     hooks.markVersionAsApplied(getSceneVersion(elements as never));
     const api = hooks.getApi();
-    if (api) api.updateScene({ elements });
+    if (!api) return;
+    // Add files BEFORE updateScene so image elements find their
+    // binaries. Excalidraw's addFiles takes an array of BinaryFileData;
+    // getFiles() returns a keyed object. Convert here.
+    if (files && typeof api.addFiles === 'function') {
+      const list = Object.values(files as Record<string, unknown>);
+      if (list.length > 0) {
+        try { api.addFiles(list); } catch { /* ignore */ }
+      }
+    }
+    api.updateScene({ elements });
   };
 
   const registerHooks: WrapperProps['registerHooks'] = (h) => {
     hooks = h;
     if (pendingReadOnly !== null) { h.setReadOnly(pendingReadOnly); pendingReadOnly = null; }
     if (pendingLocalChangeCb) { h.setLocalChangeCb(pendingLocalChangeCb); pendingLocalChangeCb = null; }
-    if (pendingRemoteScene) { applyRemote(pendingRemoteScene); pendingRemoteScene = null; }
+    if (pendingRemoteScene) {
+      applyRemote(pendingRemoteScene, pendingRemoteFiles ?? undefined);
+      pendingRemoteScene = null;
+      pendingRemoteFiles = null;
+    }
   };
 
   root.render(
@@ -221,8 +245,8 @@ export function mountExcalidraw(container: HTMLElement, opts: MountOptions): Exc
       if (hooks) hooks.setReadOnly(readOnly);
       else pendingReadOnly = readOnly;
     },
-    applyRemoteScene(elements) {
-      applyRemote(elements);
+    applyRemoteScene(elements, files) {
+      applyRemote(elements, files);
     },
     onLocalChange(cb) {
       if (hooks) hooks.setLocalChangeCb(cb);
@@ -233,6 +257,10 @@ export function mountExcalidraw(container: HTMLElement, opts: MountOptions): Exc
       return api && typeof api.getSceneElements === 'function'
         ? api.getSceneElements()
         : [];
+    },
+    getFiles() {
+      const api = hooks?.getApi();
+      return api && typeof api.getFiles === 'function' ? api.getFiles() : {};
     },
     destroy() {
       // The wrapper's own cleanup effect clears any in-flight debounce

@@ -99,6 +99,7 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
   private handle: ExcalidrawHandle | null = null;
   private subs: Subscription[] = [];
   private queuedScene: readonly unknown[] | null = null;
+  private queuedFiles: unknown | null = null;
   private mountingBoard = false;
 
   boardMountPending = false;
@@ -114,13 +115,14 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.subs.push(
       this.sync.scene$.subscribe((payload) => {
         if (this.handle) {
-          this.handle.applyRemoteScene(payload.elements);
+          this.handle.applyRemoteScene(payload.elements, payload.files);
           // Belt-and-braces: the tutor should always be writable
           // regardless of what a remote scene or a state race
           // temporarily flipped. Re-affirm on every scene arrival.
           if (this.isTutor) this.handle.setReadOnly(false);
         } else {
           this.queuedScene = payload.elements;
+          this.queuedFiles = payload.files;
         }
         // Defensive auto-open on the student side.
         if (!this.isTutor && !this.showWhiteboard) {
@@ -194,27 +196,22 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
           this.handle = mod.mountExcalidraw(this.boardHost.nativeElement, {
             isTutor: this.isTutor,
           });
-          this.handle.onLocalChange((elements) => {
-            // Tutor broadcasts only when Share is ON — otherwise
-            // they're sketching privately and the student sees
-            // nothing.
-            //
-            // Student broadcasts UNCONDITIONALLY. They can only get
-            // here at all if the tutor already flipped both Share
-            // ON and Student-can-write ON, so gating them further
-            // would just drop their strokes on the floor. Without
-            // this branch the tutor never saw the student's writing.
+          this.handle.onLocalChange((elements, files) => {
+            // Same gate as before. `files` is the Excalidraw binary
+            // map — must go with `elements` whenever the scene
+            // contains images, otherwise the peer's canvas blanks.
             if (this.isTutor) {
               if (this.isSharedWhiteboard) {
-                this.sync.broadcastScene({ elements });
+                this.sync.broadcastScene({ elements, files });
               }
             } else {
-              this.sync.broadcastScene({ elements });
+              this.sync.broadcastScene({ elements, files });
             }
           });
           if (this.queuedScene) {
-            this.handle.applyRemoteScene(this.queuedScene);
+            this.handle.applyRemoteScene(this.queuedScene, this.queuedFiles ?? undefined);
             this.queuedScene = null;
+            this.queuedFiles = null;
           }
           if (!this.isTutor) this.handle.setReadOnly(!this.studentCanWrite);
           this.mountingBoard = false;
@@ -456,12 +453,13 @@ export class ClassToolComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.isSharedWhiteboard = !this.isSharedWhiteboard;
     if (this.isSharedWhiteboard) {
       this.sync.broadcastBoardOpen();
-      // Push whatever the tutor already drew privately.
+      // Push the current scene INCLUDING files so images the tutor
+      // added privately sync to the student on Share-flip.
       const elements = this.handle?.getSceneElements() ?? [];
+      const files = this.handle?.getFiles() ?? {};
       if (elements.length > 0) {
-        this.sync.broadcastScene({ elements });
+        this.sync.broadcastScene({ elements, files });
       }
-      // Ensure we stay writable — belt-and-braces after any state race.
       this.handle?.setReadOnly(false);
     } else {
       this.sync.broadcastBoardClose();

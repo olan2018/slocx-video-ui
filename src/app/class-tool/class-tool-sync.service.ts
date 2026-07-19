@@ -39,6 +39,12 @@ interface SocketLike {
 
 export interface BoardScenePayload {
   elements: readonly unknown[];
+  /** Excalidraw's binary file map (image data keyed by fileId).
+   *  Required whenever the scene contains images — without it, the
+   *  receiving side sees image elements pointing at nothing and the
+   *  canvas either renders blank or crashes. Kept optional so pure-
+   *  vector broadcasts stay small. */
+  files?: unknown;
 }
 
 export interface ActiveMaterialPayload {
