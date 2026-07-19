@@ -117,6 +117,11 @@ const BoardWrapper: React.FC<WrapperProps> = ({ initialReadOnly, registerHooks }
       // Pull the files map at broadcast time (not at onChange time)
       // so image adds/removes since the last broadcast are captured.
       const files = apiRef.current?.getFiles?.() ?? {};
+      // eslint-disable-next-line no-console
+      console.log(
+        '[BOARD] broadcasting — elements:', els.length,
+        'files:', Object.keys(files).length,
+      );
       localChangeCbRef.current(els, files);
     }, BROADCAST_DEBOUNCE_MS);
   }, []);
@@ -210,16 +215,37 @@ export function mountExcalidraw(container: HTMLElement, opts: MountOptions): Exc
     hooks.markVersionAsApplied(getSceneVersion(elements as never));
     const api = hooks.getApi();
     if (!api) return;
-    // Add files BEFORE updateScene so image elements find their
-    // binaries. Excalidraw's addFiles takes an array of BinaryFileData;
-    // getFiles() returns a keyed object. Convert here.
-    if (files && typeof api.addFiles === 'function') {
-      const list = Object.values(files as Record<string, unknown>);
-      if (list.length > 0) {
-        try { api.addFiles(list); } catch { /* ignore */ }
+
+    // Convert the files MAP (getFiles shape) to an ARRAY (addFiles
+    // shape). Objects.values does that.
+    const fileList = files
+      ? Object.values(files as Record<string, unknown>)
+      : [];
+
+    // eslint-disable-next-line no-console
+    console.log(
+      '[BOARD] applyRemote — elements:', (elements as unknown[]).length,
+      'files:', fileList.length,
+    );
+
+    if (fileList.length > 0 && typeof api.addFiles === 'function') {
+      try {
+        api.addFiles(fileList);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[BOARD] addFiles threw:', err);
       }
     }
-    api.updateScene({ elements });
+
+    // Try passing files inline to updateScene too — newer Excalidraw
+    // versions accept them there and it also acts as a trigger to
+    // re-index the file store. Falls back to plain updateScene if
+    // the version rejects the extra key.
+    try {
+      api.updateScene({ elements, files } as never);
+    } catch {
+      api.updateScene({ elements });
+    }
   };
 
   const registerHooks: WrapperProps['registerHooks'] = (h) => {
