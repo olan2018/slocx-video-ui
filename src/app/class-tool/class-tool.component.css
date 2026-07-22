@@ -100,20 +100,58 @@
   min-width: 0 !important;
 }
 
-/* Mobile — sidebar becomes a bottom strip. Panels span full
-   width above the strip. */
-@media (max-width: 720px) {
+/* Mobile — Google-Meet-share layout. Video collapses to a strip
+   at the very top (see chat.component.css `@media (max-width: 500px)`
+   → `.meet-main--presenting .meet-video-grid`). The class-tool panel
+   fills the space between the strip and the floating pill toolbar. */
+@media (max-width: 500px) {
+  :host.ct-presenting .ct-panel,
+  :host.ct-presenting .ct-panel--materials,
+  :host.ct-presenting .ct-panel--vocab {
+    /* 118px strip + 8px gap on top; 84px floating toolbar + 12px
+       gap on the bottom. Full width minus 8px side gutters. */
+    top: 126px !important;
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 96px !important;
+    width: auto !important;
+    height: auto !important;
+    min-width: 0 !important;
+    border-radius: 16px;
+    /* On phone we don't want the header eating vertical space with the
+       full desktop chrome — compact it. */
+  }
+
+  .ct-panel__header {
+    padding: 8px 12px;
+    gap: 6px;
+    border-radius: 16px 16px 0 0;
+  }
+  .ct-panel__title {
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .ct-panel__subtitle {
+    display: none;
+  }
+  /* Draggable is pointless on touch — the panel is docked. */
+  :host.ct-presenting .ct-panel {
+    cursor: default !important;
+  }
+}
+
+/* Tablet ≤ 720px keeps the old friendlier positioning. */
+@media (min-width: 501px) and (max-width: 720px) {
   :host.ct-presenting .ct-panel,
   :host.ct-presenting .ct-panel--materials,
   :host.ct-presenting .ct-panel--vocab {
     top: 60px;
     left: 8px;
     right: 8px;
-    bottom: 190px; /* room for video strip + action bar */
+    bottom: 190px;
     width: auto;
     height: auto;
   }
-
   .ct-panel__header {
     padding: 6px 10px;
     gap: 6px;

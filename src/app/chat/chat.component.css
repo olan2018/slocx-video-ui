@@ -516,17 +516,184 @@
   .meet-controls-inner { gap: 10px; }
 }
 
-@media (max-width: 480px) {
-  .meet-pip { width: 110px; bottom: 12px; right: 12px; }
-  .meet-brand-stack { display: none; }
-  .meet-topbar-divider { display: none; }
-  .timer-caption { display: none; }
-  .meet-ctrl-btn { min-width: 40px; height: 40px; font-size: 16px; padding: 0 8px; }
-  .meet-controls-inner { gap: 5px; }
-  .lesson-timer { padding: 3px 8px 3px 3px; gap: 6px; }
-  .timer-ring { width: 34px; height: 34px; }
-  .timer-label { font-size: 12px; }
+/* ═══════════════════════════════════════════════════════════════
+   Mobile classroom — "Direction 1" (Video First, Meet-mobile feel).
+   Full-bleed video, slim glass top strip, floating pill toolbar
+   at the bottom, small self-view PIP. Meet-share layout for when a
+   class-tool is being presented lives further down.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 500px) {
+  /* ── Root: use every pixel; hide the app-level background chrome. */
+  .meet-root {
+    /* Meet-mobile is edge-to-edge dark. Force it here even in "light"
+       theme so the phone WebView doesn't flash a white gutter. */
+    background: #000 !important;
+  }
+  .meet-main {
+    padding: 0;
+    background: #000;
+  }
+
+  /* ── Top strip: collapse to a floating chip row, no solid bar. */
+  .meet-topbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 100%);
+    border: 0;
+    padding: 10px 12px 14px;
+    z-index: 20;
+    pointer-events: none;
+  }
+  .meet-topbar > * { pointer-events: auto; }
+  .meet-topbar-left,
+  .meet-topbar-right { gap: 8px; }
+  .meet-brand-stack,
+  .meet-topbar-divider,
+  .meet-logo-wrap,
+  .meet-clock,
+  .theme-toggle,
+  .timer-caption { display: none !important; }
+  .lesson-timer {
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 4px 10px 4px 4px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #fff;
+  }
+  .timer-ring { width: 28px; height: 28px; }
+  .timer-label { font-size: 12px; font-weight: 700; color: #fff; }
+
+  /* ── Video grid: fills every pixel, no rounded card. */
+  .meet-video-grid {
+    inset: 0;
+    padding: 0;
+    background: #000;
+  }
+
+  /* ── Self-view PIP: smaller, rounded, top-right, floating. */
+  .meet-pip {
+    width: 90px !important;
+    height: 120px !important;
+    aspect-ratio: 3 / 4;
+    top: 60px !important;
+    right: 12px !important;
+    bottom: auto !important;
+    left: auto !important;
+    border-radius: 12px;
+    border: 1.5px solid rgba(255,255,255,0.35);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+    overflow: hidden;
+  }
+  .meet-pip video { border-radius: 10px; }
+  .meet-pip-pin-hint { display: none; }
+  .meet-name-tag {
+    font-size: 9px;
+    padding: 2px 5px;
+  }
+
+  /* ── Bottom toolbar: floating pill, glass finish, thumb-sized. */
+  .meet-controls {
+    position: absolute;
+    bottom: 18px; left: 12px; right: 12px;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    z-index: 20;
+  }
+  .meet-controls-inner {
+    background: rgba(18, 20, 25, 0.72);
+    backdrop-filter: blur(30px) saturate(160%);
+    -webkit-backdrop-filter: blur(30px) saturate(160%);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 32px;
+    padding: 8px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    box-shadow:
+      0 12px 32px rgba(0,0,0,0.45),
+      0 2px 6px rgba(0,0,0,0.3);
+  }
+  .meet-ctrl-btn {
+    min-width: 42px !important;
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 50% !important;
+    padding: 0 !important;
+    font-size: 17px !important;
+    background: rgba(255,255,255,0.12) !important;
+    color: #fff !important;
+    flex-direction: column !important;
+    gap: 0 !important;
+    flex-shrink: 0;
+  }
+  .meet-ctrl-btn:hover { background: rgba(255,255,255,0.18) !important; }
+  .meet-ctrl-btn.meet-ctrl-off {
+    background: #ea4335 !important;
+    color: #fff !important;
+  }
+  .meet-ctrl-btn.meet-ctrl-leave {
+    background: #ea4335 !important;
+    color: #fff !important;
+    border-radius: 50% !important;
+  }
+  .meet-ctrl-btn.meet-ctrl-active {
+    background: rgba(255,255,255,0.9) !important;
+    color: #202124 !important;
+  }
+  .meet-ctrl-label { display: none !important; }
+
+  /* Any secondary chrome we don't want cluttering a phone. */
+  .audio-prompt { top: 60px; }
+  .reactions-float { bottom: 80px; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Meet-share layout — kicks in on mobile whenever:
+       • a class-tool panel is being presented (whiteboard, materials,
+         vocab, quiz) — signalled via `.meet-main--presenting`, OR
+       • the tutor is sharing their screen — signalled via
+         `.meet-pip.screen-sharing` (the pip carries the screen stream).
+     In both cases, the shared content becomes the primary surface and
+     the video tiles collapse to a small strip along the top. Same feel
+     as Google Meet's "someone is presenting" on mobile.
+     ═════════════════════════════════════════════════════════════════ */
+  .meet-main--presenting .meet-video-grid,
+  .meet-main:has(.meet-pip.screen-sharing) .meet-video-grid {
+    /* Grid becomes a top strip — remote tiles line up horizontally. */
+    inset: auto 0 auto 0;
+    top: 0;
+    height: 118px;
+    background: #0a0a0a;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    z-index: 15;
+  }
+
+  /* When presenting, the class-tool panels below need room — the
+     class-tool.component.css @media block sizes them from top:60 to
+     bottom:190, which we adjust once here in case toolbar height
+     changed. */
+  .meet-main--presenting {
+    /* Absorb the strip so the class-tool panel starts underneath. */
+    padding-top: 118px !important;
+  }
+
+  /* Self-view PIP: when presenting, shrink further and move to the
+     top-right corner of the video strip instead of floating. */
+  .meet-main--presenting .meet-pip,
+  .meet-main:has(.meet-pip.screen-sharing) .meet-pip:not(.screen-sharing) {
+    width: 78px !important;
+    height: 104px !important;
+    top: 8px !important;
+    right: 8px !important;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
 }
+
+
 
 /* ── Audio blocked prompt ────────────────────────────────── */
 .audio-prompt {
