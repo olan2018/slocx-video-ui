@@ -602,17 +602,20 @@
     overflow: hidden;
   }
 
-  /* <video> inside the tile: cover the tile, not contain. This is
-     what actually fills the frame. `contain` is why the tutor's face
-     was showing with black bars around it. */
+  /* <video> inside the tile: FIT the whole frame — show every pixel
+     the tutor's camera is sending, no zoom-crop. On a portrait phone
+     with a 16:9 remote, this leaves subtle black bars top/bottom, but
+     the whole face is visible. Much better than `cover` which crops
+     eyes/forehead when the aspect ratios don't match. */
   :host ::ng-deep .meet-video-grid > .meet-video-tile > video {
-    object-fit: cover !important;
+    object-fit: contain !important;
     width: 100% !important;
     height: 100% !important;
+    background: #000 !important;
   }
 
-  /* Screen-share tile stays `contain` — cropping shared code / slides
-     hides the important edges. Compose it on black. */
+  /* Screen-share tile: same `contain` behaviour — cropping shared
+     code / slides would hide the important edges. */
   :host ::ng-deep .meet-video-grid > .meet-video-tile.screen-sharing > video {
     object-fit: contain !important;
     background: #000 !important;
@@ -695,7 +698,8 @@
     cursor: pointer;                   /* tap to unpin */
   }
   :host ::ng-deep .meet-video-grid.has-pinned > .meet-video-tile--pinned > video {
-    object-fit: cover !important;
+    object-fit: contain !important;
+    background: #000 !important;
     width: 100% !important;
     height: 100% !important;
   }
@@ -718,8 +722,12 @@
     z-index: 8;
     cursor: pointer;
   }
+  /* Pinned thumbnail pills are tiny (78×104) — `cover` here is right,
+     even a little crop is better than letterboxing a face into a
+     matchbook-sized frame. */
   :host ::ng-deep .meet-video-grid.has-pinned > .meet-video-tile:not(.meet-video-tile--pinned) > video {
     object-fit: cover !important;
+    background: transparent !important;
     width: 100% !important;
     height: 100% !important;
     border-radius: 8px;
@@ -877,6 +885,13 @@
     max-width: 148px !important;
     aspect-ratio: auto !important;
     border-radius: 10px;
+  }
+  /* Strip tiles are small, so `cover` is right — letterbox in a
+     148×106 pill would waste the whole tile on black bars. */
+  :host ::ng-deep .meet-main--presenting .meet-video-tile > video,
+  :host ::ng-deep .meet-main:has(.meet-pip.screen-sharing) .meet-video-tile > video {
+    object-fit: cover !important;
+    background: transparent !important;
   }
   :host ::ng-deep .meet-main--presenting .meet-video-tile.screen-sharing,
   :host ::ng-deep .meet-main:has(.meet-pip.screen-sharing) .meet-video-tile.screen-sharing {
