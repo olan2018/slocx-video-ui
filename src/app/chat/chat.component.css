@@ -565,11 +565,183 @@
   .timer-ring { width: 28px; height: 28px; }
   .timer-label { font-size: 12px; font-weight: 700; color: #fff; }
 
-  /* ── Video grid: fills every pixel, no rounded card. */
+  /* ═══════════════════════════════════════════════════════════════
+     Mobile video grid — behaves like FaceTime / Meet mobile.
+
+       • 1 remote  → tile is edge-to-edge, video `cover`s the frame
+                     (no letterbox, no 16:9 pillarboxing on portrait).
+       • 2 remotes → vertical split, each 50% of the screen height.
+       • 3+ remotes → 2-column grid, each tile fills its cell.
+       • Screen-share or pinned → same "one tile takes the whole
+         screen" behaviour, other tiles collapse into a horizontal
+         thumbnail strip at the bottom (Meet-style spotlight).
+
+     The key trick: force each tile to fill its parent cell and let
+     the <video> element `object-fit: cover` — that's what removes
+     the black bars everyone hates on mobile.
+     ═════════════════════════════════════════════════════════════════ */
   .meet-video-grid {
     inset: 0;
     padding: 0;
     background: #000;
+    gap: 2px;                 /* hairline separator between tiles */
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  :host ::ng-deep .meet-video-grid > .meet-video-tile {
+    /* Kill the desktop's 16:9 aspect-ratio + min-width — those force
+       letterbox on a portrait phone. Fill the cell fully. */
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    aspect-ratio: auto !important;
+    border-radius: 0 !important;
+    overflow: hidden;
+  }
+
+  /* <video> inside the tile: cover the tile, not contain. This is
+     what actually fills the frame. `contain` is why the tutor's face
+     was showing with black bars around it. */
+  :host ::ng-deep .meet-video-grid > .meet-video-tile > video {
+    object-fit: cover !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Screen-share tile stays `contain` — cropping shared code / slides
+     hides the important edges. Compose it on black. */
+  :host ::ng-deep .meet-video-grid > .meet-video-tile.screen-sharing > video {
+    object-fit: contain !important;
+    background: #000 !important;
+  }
+
+  /* ── 1 remote — the common case ── */
+  .meet-video-grid.has-remotes:not(.has-pinned) {
+    display: flex;
+    flex-direction: column;
+  }
+  :host ::ng-deep .meet-video-grid.has-remotes:not(.has-pinned) > .meet-video-tile {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+
+  /* ── 2 remotes — vertical split ── */
+  :host ::ng-deep .meet-video-grid.has-remotes:not(.has-pinned):has(> .meet-video-tile:nth-child(2)):not(:has(> .meet-video-tile:nth-child(3))) > .meet-video-tile {
+    flex-basis: 50% !important;
+  }
+
+  /* ── 3+ remotes — 2-col grid ── */
+  :host ::ng-deep .meet-video-grid.has-remotes:not(.has-pinned):has(> .meet-video-tile:nth-child(3)) {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: 1fr;
+    gap: 2px;
+  }
+  :host ::ng-deep .meet-video-grid.has-remotes:not(.has-pinned):has(> .meet-video-tile:nth-child(3)) > .meet-video-tile {
+    width: auto !important;
+  }
+
+  /* ── Pin overlay button — bigger tap target on touch. */
+  :host ::ng-deep .meet-video-tile-pin {
+    opacity: 0 !important;   /* Hidden — mobile users don't hover; use tap-to-pin instead. */
+  }
+
+  /* Speaker / name tag — pill-shape, subtle, bottom-left. */
+  :host ::ng-deep .meet-video-tile-name {
+    bottom: 8px !important;
+    left: 8px !important;
+    right: auto !important;
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+    background: rgba(0, 0, 0, 0.55) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 6px !important;
+    max-width: 60% !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     Pinned / spotlight mode on mobile.
+     Desktop's `has-pinned` block forces a 16:9 pinned tile + a
+     200px-wide thumbnail strip, which on a portrait phone squashes
+     the pinned face into a small letterbox with a huge black gap
+     underneath — the "flattens" the user reported.
+
+     Mobile spec:
+       • Pinned tile fills the WHOLE screen, video `cover`s the frame.
+       • Other tiles collapse to tiny 78×104 floating pills at the
+         bottom-left (above the toolbar), Google-Meet-style. Tap one
+         to swap the spotlight. Tap the pinned tile again to unpin.
+     ═════════════════════════════════════════════════════════════════ */
+  .meet-video-grid.has-pinned {
+    display: block !important;
+    position: absolute;
+    inset: 0;
+  }
+  :host ::ng-deep .meet-video-grid.has-pinned > .meet-video-tile--pinned {
+    /* Full-screen spotlight — no aspect-ratio cage. */
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    aspect-ratio: auto !important;
+    border-radius: 0 !important;
+    order: 0 !important;
+    cursor: pointer;                   /* tap to unpin */
+  }
+  :host ::ng-deep .meet-video-grid.has-pinned > .meet-video-tile--pinned > video {
+    object-fit: cover !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* Non-pinned tiles → floating pill row at the bottom, above the
+     toolbar. Horizontal scroll when many participants. */
+  :host ::ng-deep .meet-video-grid.has-pinned > .meet-video-tile:not(.meet-video-tile--pinned) {
+    position: absolute !important;
+    left: 12px !important;
+    bottom: 92px !important;           /* above the floating toolbar */
+    width: 78px !important;
+    height: 104px !important;
+    min-width: 0 !important;
+    max-width: 78px !important;
+    max-height: 104px !important;
+    aspect-ratio: auto !important;
+    border-radius: 10px !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.4);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    z-index: 8;
+    cursor: pointer;
+  }
+  :host ::ng-deep .meet-video-grid.has-pinned > .meet-video-tile:not(.meet-video-tile--pinned) > video {
+    object-fit: cover !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 8px;
+  }
+  /* Second, third, fourth thumbnail — line them up rightward from
+     the first, keeping them clear of the leaveBtn side. */
+  :host ::ng-deep .meet-video-grid.has-pinned > .meet-video-tile:not(.meet-video-tile--pinned):nth-of-type(2) { left:  96px !important; }
+  :host ::ng-deep .meet-video-grid.has-pinned > .meet-video-tile:not(.meet-video-tile--pinned):nth-of-type(3) { left: 180px !important; }
+  :host ::ng-deep .meet-video-grid.has-pinned > .meet-video-tile:not(.meet-video-tile--pinned):nth-of-type(4) { left: 264px !important; }
+
+  /* When pinned + on mobile, hide the floating self-view PIP
+     entirely if the local user is the one pinned (they'd double).
+     Otherwise keep the self-PIP but move it to the top-right so it
+     doesn't collide with the thumbnail row bottom-left. */
+  .meet-main:has(.meet-video-tile--pinned.meet-video-tile--local) .meet-pip {
+    display: none !important;
+  }
+  .meet-main:has(.meet-video-tile--pinned):not(:has(.meet-video-tile--pinned.meet-video-tile--local)) .meet-pip {
+    top: 60px !important;
+    right: 12px !important;
+    width: 78px !important;
+    height: 104px !important;
   }
 
   /* ── Self-view PIP: smaller, rounded, top-right, floating. */
