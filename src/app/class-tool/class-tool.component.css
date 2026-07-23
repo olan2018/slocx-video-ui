@@ -103,40 +103,59 @@
 /* Mobile — Google-Meet-share layout. Video collapses to a strip
    at the very top (see chat.component.css `@media (max-width: 500px)`
    → `.meet-main--presenting .meet-video-grid`). The class-tool panel
-   fills the space between the strip and the floating pill toolbar. */
+   fills the space between the strip and the floating pill toolbar.
+
+   Selectors need to at least MATCH the desktop `:host.ct-presenting
+   .ct-panel*` specificity or the desktop rules win by source-order.
+   Since we're using the same selector shape inside a narrower media
+   query, that's fine — the media query wins on top-order.
+
+   The `!important` overrides also beat any inline styles that
+   DraggableDirective may have baked in from a previous drag session. */
 @media (max-width: 500px) {
   :host.ct-presenting .ct-panel,
   :host.ct-presenting .ct-panel--materials,
-  :host.ct-presenting .ct-panel--vocab {
+  :host.ct-presenting .ct-panel--vocab,
+  :host.ct-presenting .ct-panel--whiteboard {
     /* 118px strip + 8px gap on top; 84px floating toolbar + 12px
        gap on the bottom. Full width minus 8px side gutters. */
+    position: fixed !important;
     top: 126px !important;
     left: 8px !important;
     right: 8px !important;
     bottom: 96px !important;
     width: auto !important;
     height: auto !important;
+    max-width: none !important;
     min-width: 0 !important;
-    border-radius: 16px;
-    /* On phone we don't want the header eating vertical space with the
-       full desktop chrome — compact it. */
+    max-height: none !important;
+    min-height: 0 !important;
+    /* Kill any inline transform DraggableDirective might have applied. */
+    transform: none !important;
+    border-radius: 16px !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3) !important;
   }
 
   .ct-panel__header {
-    padding: 8px 12px;
-    gap: 6px;
-    border-radius: 16px 16px 0 0;
+    padding: 10px 12px !important;
+    gap: 6px !important;
+    border-radius: 16px 16px 0 0 !important;
+    /* On touch, dragging the header does nothing useful — cue the user
+       that it's not draggable so they don't fight the fixed layout. */
+    cursor: default !important;
   }
   .ct-panel__title {
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 13px !important;
+    font-weight: 700 !important;
   }
   .ct-panel__subtitle {
-    display: none;
+    display: none !important;
   }
-  /* Draggable is pointless on touch — the panel is docked. */
-  :host.ct-presenting .ct-panel {
-    cursor: default !important;
+  .ct-panel__body {
+    /* Give the body proper scroll on mobile — most tools spill on a
+       phone (long material list, quiz options, etc.) */
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
   }
 }
 

@@ -618,12 +618,12 @@
       0 2px 6px rgba(0,0,0,0.3);
   }
   .meet-ctrl-btn {
-    min-width: 42px !important;
-    width: 42px !important;
-    height: 42px !important;
+    min-width: 44px !important;
+    width: 44px !important;
+    height: 44px !important;
     border-radius: 50% !important;
     padding: 0 !important;
-    font-size: 17px !important;
+    font-size: 18px !important;
     background: rgba(255,255,255,0.12) !important;
     color: #fff !important;
     flex-direction: column !important;
@@ -646,6 +646,17 @@
   }
   .meet-ctrl-label { display: none !important; }
 
+  /* ── Phone toolbar de-cluttering ──
+     8 icons don't fit in a phone pill and wrap ugly. On mobile we
+     keep only what a student typically needs — mic, cam, class tools,
+     chat, leave — and hide the desktop-only affordances. */
+  .meet-ctrl-btn[title*="Share" i],
+  .meet-ctrl-btn[title*="hand" i],
+  .meet-ctrl-btn[title*="Hand" i],
+  .meet-ctrl-reactions-wrap {
+    display: none !important;
+  }
+
   /* Any secondary chrome we don't want cluttering a phone. */
   .audio-prompt { top: 60px; }
   .reactions-float { bottom: 80px; }
@@ -663,33 +674,69 @@
   .meet-main--presenting .meet-video-grid,
   .meet-main:has(.meet-pip.screen-sharing) .meet-video-grid {
     /* Grid becomes a top strip — remote tiles line up horizontally. */
-    inset: auto 0 auto 0;
-    top: 0;
+    position: absolute;
+    inset: 0 0 auto 0;
     height: 118px;
+    padding: 6px 108px 6px 8px;   /* right pad = PIP width + gutter */
     background: #0a0a0a;
     border-bottom: 1px solid rgba(255,255,255,0.05);
     z-index: 15;
+    gap: 6px;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+  }
+  .meet-main--presenting .meet-video-grid::-webkit-scrollbar,
+  .meet-main:has(.meet-pip.screen-sharing) .meet-video-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Tile override — the desktop rule sets `min-width: 280px` and
+     `flex: 1 1 480px` which makes tiles overflow our 118px strip and
+     become invisible. Force strip-sized tiles when presenting. */
+  :host ::ng-deep .meet-main--presenting .meet-video-tile,
+  :host ::ng-deep .meet-main:has(.meet-pip.screen-sharing) .meet-video-tile {
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    width: 148px !important;
+    height: 106px !important;
+    max-width: 148px !important;
+    aspect-ratio: auto !important;
+    border-radius: 10px;
+  }
+  :host ::ng-deep .meet-main--presenting .meet-video-tile.screen-sharing,
+  :host ::ng-deep .meet-main:has(.meet-pip.screen-sharing) .meet-video-tile.screen-sharing {
+    /* Screen-share tile: don't try to fit it in the strip — it should
+       take the primary presenting area (handled by the JS layout;
+       here we just make sure the tile isn't clipped). */
+    width: auto !important;
+    max-width: none !important;
   }
 
   /* When presenting, the class-tool panels below need room — the
-     class-tool.component.css @media block sizes them from top:60 to
-     bottom:190, which we adjust once here in case toolbar height
-     changed. */
+     class-tool.component.css @media block sizes them from top:126 to
+     bottom:96 to leave room for the strip + floating toolbar. */
   .meet-main--presenting {
-    /* Absorb the strip so the class-tool panel starts underneath. */
-    padding-top: 118px !important;
+    padding-top: 0 !important;   /* strip is absolutely positioned */
   }
 
-  /* Self-view PIP: when presenting, shrink further and move to the
-     top-right corner of the video strip instead of floating. */
+  /* Self-view PIP: when presenting, shrink further and dock to the
+     top-right corner OF THE STRIP (so it's beside the tutor tile,
+     Meet-share style). */
   .meet-main--presenting .meet-pip,
   .meet-main:has(.meet-pip.screen-sharing) .meet-pip:not(.screen-sharing) {
-    width: 78px !important;
-    height: 104px !important;
-    top: 8px !important;
+    width: 92px !important;
+    height: 106px !important;
+    top: 6px !important;
     right: 8px !important;
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    bottom: auto !important;
+    left: auto !important;
+    border-radius: 10px !important;
+    border: 1.5px solid rgba(255,255,255,0.35) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+    z-index: 16;
   }
 }
 
